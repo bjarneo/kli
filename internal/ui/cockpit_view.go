@@ -38,6 +38,13 @@ func (c cockpitView) View(width, height int) string {
 		c.kv("nodes", fmt.Sprintf("%d/%d ready", o.NodesReady, o.Nodes)),
 		c.kv("namespaces", fmt.Sprintf("%d", o.Namespaces)),
 	}
+	if len(o.NodeIssues) > 0 {
+		msg := o.NodeIssues[0]
+		if extra := len(o.NodeIssues) - 1; extra > 0 {
+			msg += fmt.Sprintf(" +%d", extra)
+		}
+		cluster = append(cluster, th.Bad.Render("⚠ "+msg))
+	}
 
 	var resources []string
 	if o.HasMetrics {
@@ -59,8 +66,14 @@ func (c cockpitView) View(width, height int) string {
 		"  " + th.Good.Render(fmt.Sprintf("%d running", o.PodRunning)),
 		"  " + th.Warn.Render(fmt.Sprintf("%d pending", o.PodPending)),
 		"  " + th.Bad.Render(fmt.Sprintf("%d failed", o.PodFailed)),
-		c.kv("deploys", fmt.Sprintf("%d/%d ready", o.DeploymentsReady, o.Deployments)),
 	}
+	if o.PodNotReady > 0 {
+		workloads = append(workloads, "  "+th.Warn.Render(fmt.Sprintf("%d not ready", o.PodNotReady)))
+	}
+	if o.PodCrashLoop > 0 {
+		workloads = append(workloads, "  "+th.Bad.Render(fmt.Sprintf("%d crashloop", o.PodCrashLoop)))
+	}
+	workloads = append(workloads, c.kv("deploys", fmt.Sprintf("%d/%d ready", o.DeploymentsReady, o.Deployments)))
 
 	// Top region: three columns when wide, stacked otherwise.
 	var top string
@@ -104,7 +117,11 @@ func (c cockpitView) warningLines(w int) []string {
 		if e.Namespace != "" {
 			loc = e.Namespace + "/" + e.Object
 		}
-		left := fmt.Sprintf("%-4s ", e.Age) + th.HeaderVal.Render(truncate(loc, 36)) + " " + th.Warn.Render(e.Reason)
+		reason := e.Reason
+		if e.Count > 1 {
+			reason += fmt.Sprintf(" ×%d", e.Count)
+		}
+		left := fmt.Sprintf("%-4s ", e.Age) + th.HeaderVal.Render(truncate(loc, 36)) + " " + th.Warn.Render(reason)
 		msg := th.Dim.Render(e.Message)
 		line := left + "  " + msg
 		lines = append(lines, ansi.Truncate(line, w, "…"))
@@ -119,7 +136,8 @@ func (c cockpitView) kv(k, v string) string {
 // gauge renders "LABEL [████░░░░] 67%" colored by utilization.
 func (c cockpitView) gauge(label string, p, width int) string {
 	th := c.th
-	barW := width - len(label) - 7
+	// layout: "LABEL " + bar + " 100%"  => label + 1 + barW + 1 + 4
+	barW := width - len(label) - 6
 	if barW < 4 {
 		barW = 4
 	}

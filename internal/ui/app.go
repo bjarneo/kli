@@ -64,7 +64,8 @@ type App struct {
 	theme  Theme
 	keys   keyMap
 
-	width, height int
+	width, height int // usable area, inside the outer gutter
+	gutter        int // equal padding (cells) on every side
 
 	res       k8s.ResourceInfo
 	namespace string // "" means all namespaces
@@ -192,7 +193,15 @@ func (a *App) setStatus(text string, isErr bool) {
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
-		a.width, a.height = m.Width, m.Height
+		// Reserve an equal gutter on every side, then let all layout work against
+		// the reduced area; View pads it back. Skipped on small terminals where
+		// the space is too precious.
+		a.gutter = 1
+		if m.Width < 24 || m.Height < 10 {
+			a.gutter = 0
+		}
+		a.width = m.Width - 2*a.gutter
+		a.height = m.Height - 2*a.gutter
 		if !a.sidebarVisible() {
 			a.focus = focusMain
 		}
@@ -1273,7 +1282,10 @@ func (a App) View() string {
 	// header/body/footer layout.
 	body = lipgloss.NewStyle().MaxHeight(a.bodyH()).Render(body)
 	frame := a.headerView() + "\n" + body + "\n" + a.footerView()
-	return lipgloss.NewStyle().MaxWidth(a.width).Render(frame)
+	frame = lipgloss.NewStyle().MaxWidth(a.width).Render(frame)
+	// Equal gutter on every side. Padding adds 2*gutter cols and rows back, so
+	// the result is exactly the full terminal size.
+	return lipgloss.NewStyle().Padding(a.gutter, a.gutter).Render(frame)
 }
 
 func (a App) activeNavKey() string {

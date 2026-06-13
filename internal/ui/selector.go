@@ -178,7 +178,7 @@ func (s selector) View(width, height int) string {
 	if boxW < 8 {
 		boxW = 8
 	}
-	inner := boxW - 4 // account for border + padding
+	inner := boxW - 6 // account for border (2) + padding (4)
 	if inner < 1 {
 		inner = 1
 	}

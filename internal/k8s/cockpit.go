@@ -11,7 +11,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EventLine is a single recent event for the cockpit.
+// EventLine is a single recent event for the cockpit. Count is how many times
+// the same (namespace, object, reason) recurred.
 type EventLine struct {
 	Age       string
 	Namespace string
@@ -19,6 +20,7 @@ type EventLine struct {
 	Reason    string
 	Object    string
 	Message   string
+	Count     int
 }
 
 // ClusterOverview is the cockpit's snapshot of cluster health and usage.
@@ -40,9 +42,13 @@ type ClusterOverview struct {
 	PodPending   int
 	PodFailed    int
 	PodSucceeded int
+	PodNotReady  int // Running but a container is not Ready
+	PodCrashLoop int // CrashLoopBackOff / image pull errors
 
 	Deployments      int
 	DeploymentsReady int
+
+	NodeIssues []string // e.g. "node-x NotReady", "node-y DiskPressure"
 
 	Warnings []EventLine
 }
@@ -80,6 +86,7 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 			if nodeReady(n) {
 				o.NodesReady++
 			}
+			o.NodeIssues = append(o.NodeIssues, nodeIssues(n)...)
 			if q, ok := n.Status.Allocatable[corev1.ResourceCPU]; ok {
 				o.CPUAllocMilli += q.MilliValue()
 			}
@@ -112,7 +119,8 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 		}
 		o.Pods = len(pods.Items)
 		for i := range pods.Items {
-			switch pods.Items[i].Status.Phase {
+			p := &pods.Items[i]
+			switch p.Status.Phase {
 			case corev1.PodRunning:
 				o.PodRunning++
 			case corev1.PodPending:
@@ -121,6 +129,19 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 				o.PodFailed++
 			case corev1.PodSucceeded:
 				o.PodSucceeded++
+			}
+			// A crashlooping or image-pull-failing pod still reports Running, so
+			// look at container statuses to find what is actually broken.
+			for _, cs := range p.Status.ContainerStatuses {
+				if w := cs.State.Waiting; w != nil {
+					switch w.Reason {
+					case "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull":
+						o.PodCrashLoop++
+					}
+				}
+			}
+			if p.Status.Phase == corev1.PodRunning && !podReady(p) {
+				o.PodNotReady++
 			}
 		}
 	})
@@ -155,6 +176,34 @@ func nodeReady(n *corev1.Node) bool {
 	return false
 }
 
+// nodeIssues returns human-readable problems for a node (not-ready, or a
+// pressure/network condition that is True).
+func nodeIssues(n *corev1.Node) []string {
+	var out []string
+	for _, c := range n.Status.Conditions {
+		switch c.Type {
+		case corev1.NodeReady:
+			if c.Status != corev1.ConditionTrue {
+				out = append(out, n.Name+" NotReady")
+			}
+		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure, corev1.NodeNetworkUnavailable:
+			if c.Status == corev1.ConditionTrue {
+				out = append(out, n.Name+" "+string(c.Type))
+			}
+		}
+	}
+	return out
+}
+
+func podReady(p *corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
 func (c *Client) recentWarnings(ctx context.Context) []EventLine {
 	list, err := c.clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
 		FieldSelector: "type=Warning",
@@ -167,16 +216,23 @@ func (c *Client) recentWarnings(ctx context.Context) []EventLine {
 	sort.Slice(items, func(i, j int) bool {
 		return eventTime(&items[i]).After(eventTime(&items[j]))
 	})
-	if len(items) > 8 {
-		items = items[:8]
-	}
-	out := make([]EventLine, 0, len(items))
+
+	// Dedupe by (namespace, object, reason) so one flapping object cannot crowd
+	// out other distinct problems; keep the newest and count the rest.
+	seen := map[string]int{} // key -> index in out
+	var out []EventLine
 	for i := range items {
 		e := &items[i]
 		obj := e.InvolvedObject.Kind
 		if e.InvolvedObject.Name != "" {
 			obj += "/" + e.InvolvedObject.Name
 		}
+		key := e.Namespace + "|" + obj + "|" + e.Reason
+		if idx, ok := seen[key]; ok {
+			out[idx].Count++
+			continue
+		}
+		seen[key] = len(out)
 		out = append(out, EventLine{
 			Age:       ageString(eventTime(e)),
 			Namespace: e.Namespace,
@@ -184,7 +240,11 @@ func (c *Client) recentWarnings(ctx context.Context) []EventLine {
 			Reason:    e.Reason,
 			Object:    obj,
 			Message:   e.Message,
+			Count:     1,
 		})
+		if len(out) >= 8 {
+			break
+		}
 	}
 	return out
 }

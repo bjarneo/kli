@@ -36,9 +36,11 @@ func fakeOverview() *k8s.ClusterOverview {
 		CPUUsedMilli: 4200, CPUAllocMilli: 16000,
 		MemUsedBytes: 12 << 30, MemAllocBytes: 32 << 30,
 		Namespaces: 23, Pods: 200, PodRunning: 190, PodPending: 2, PodFailed: 1,
+		PodNotReady: 3, PodCrashLoop: 1,
 		Deployments: 42, DeploymentsReady: 40,
+		NodeIssues: []string{"ip-10-0-1-2 DiskPressure", "ip-10-0-3-4 NotReady"},
 		Warnings: []k8s.EventLine{
-			{Age: "2m", Namespace: "default", Type: "Warning", Reason: "BackOff", Object: "Pod/api-7d9", Message: "Back-off restarting failed container"},
+			{Age: "2m", Namespace: "default", Type: "Warning", Reason: "BackOff", Object: "Pod/api-7d9", Message: "Back-off restarting failed container", Count: 12},
 		},
 	}
 }

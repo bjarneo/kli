@@ -156,7 +156,7 @@ func NewTheme(name string, p Palette) Theme {
 	t.PaneInactive = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.Border)
 	t.NavSection = lipgloss.NewStyle().Foreground(p.Muted).Bold(true)
 
-	t.ModalBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.Accent).Padding(0, 1)
+	t.ModalBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(p.Accent).Padding(1, 2)
 	t.ModalTitle = lipgloss.NewStyle().Foreground(p.Accent).Bold(true)
 	t.Prompt = lipgloss.NewStyle().Foreground(p.Accent2).Bold(true)
 	t.SelItem = lipgloss.NewStyle().Foreground(p.Fg)

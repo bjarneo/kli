@@ -3,9 +3,11 @@
 ## Cockpit overview
 
 kli opens on a cockpit: a single-screen overview of the cluster. It shows the
-server version and node readiness, live CPU and memory gauges (from the metrics
-API), pod counts by phase, deployment readiness, and the most recent warning
-events. It refreshes every few seconds. Reach it any time from the Overview
+server version, node readiness and any node pressure (DiskPressure,
+MemoryPressure, NotReady, ...), live CPU and memory gauges (from the metrics
+API), pod counts by phase plus how many are not-ready or crashlooping,
+deployment readiness, and recent warning events (deduplicated, with a recurrence
+count). It refreshes every few seconds. Reach it any time from the Overview
 entry at the top of the nav, and press Enter on a resource (or `:` / `Ctrl+K`)
 to drill in.
 

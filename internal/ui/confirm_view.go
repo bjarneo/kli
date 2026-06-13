@@ -20,7 +20,7 @@ func (c confirmView) View(width, height int) string {
 	border := c.th.ModalBorder
 	if c.danger {
 		titleStyle = lipgloss.NewStyle().Foreground(c.th.P.Bad).Bold(true)
-		border = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c.th.P.Bad).Padding(0, 1)
+		border = c.th.ModalBorder.BorderForeground(c.th.P.Bad) // same padding, danger color
 	}
 
 	body := titleStyle.Render(c.title) + "\n\n" +
@@ -33,8 +33,8 @@ func (c confirmView) View(width, height int) string {
 	if boxW < 40 {
 		boxW = 40
 	}
-	if boxW > width-4 {
-		boxW = width - 4
+	if boxW > width-6 { // border (2) + padding (4)
+		boxW = width - 6
 	}
 	if boxW < 8 {
 		boxW = 8
