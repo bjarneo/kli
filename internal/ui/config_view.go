@@ -100,7 +100,7 @@ func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, wi
 		add("Binary Data", dataKeyRows(obj, []string{"binaryData"}, "encoded"))
 	case "secrets":
 		add("Secret", secretRows(obj))
-		add("Data", secretDataRows(obj, width))
+		add("Decoded Data", secretDataRows(th, obj, width))
 	case "services":
 		add("Service", serviceRows(obj))
 	case "ingresses":
@@ -237,7 +237,7 @@ func secretRows(obj map[string]interface{}) []configRow {
 	return rows
 }
 
-func secretDataRows(obj map[string]interface{}, width int) []configRow {
+func secretDataRows(th Theme, obj map[string]interface{}, width int) []configRow {
 	data, ok := mapAt(obj, "data")
 	if !ok {
 		return nil
@@ -252,18 +252,19 @@ func secretDataRows(obj map[string]interface{}, width int) []configRow {
 		s, _ := data[k].(string)
 		dec, err := base64.StdEncoding.DecodeString(s)
 		if err != nil {
-			rows = append(rows, configRow{k, byteSize(len(s)) + " · decode failed"})
+			rows = append(rows, configRow{k, th.Bad.Render("decode failed") + " " + th.Dim.Render(byteSize(len(s))+" encoded")})
 			continue
 		}
 		if !utf8.Valid(dec) {
-			rows = append(rows, configRow{k, byteSize(len(dec)) + " · binary"})
+			rows = append(rows, configRow{k, th.Warn.Render("binary") + " " + th.Dim.Render(byteSize(len(dec))+" decoded")})
 			continue
 		}
 		preview := firstLine(string(dec))
-		if preview != "" {
-			preview = " · " + ansi.Truncate(preview, previewW, "…")
+		if preview == "" {
+			preview = "<empty>"
 		}
-		rows = append(rows, configRow{k, byteSize(len(dec)) + preview})
+		value := th.Good.Render(ansi.Truncate(preview, previewW, "…")) + " " + th.Dim.Render(byteSize(len(dec))+" decoded")
+		rows = append(rows, configRow{k, value})
 	}
 	return rows
 }
