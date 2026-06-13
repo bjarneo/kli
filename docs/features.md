@@ -34,10 +34,6 @@ stripped), with theme-aware syntax highlighting. `g` / `G` jump to top and
 bottom. Secret `data` is base64-decoded here for readability; editing a Secret
 still fetches raw base64 so saves stay valid.
 
-Press `|` to filter the YAML through `yq` (e.g. `.spec.containers[].image`); an
-empty expression resets to the full document. This needs `yq` on your PATH and
-is skipped with a message otherwise.
-
 ## Node stats
 
 On the nodes view, kli appends live CPU and memory usage and percentages from

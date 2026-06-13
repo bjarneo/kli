@@ -1,10 +1,7 @@
 package ui
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -263,24 +260,4 @@ func editorCommand(path string) (string, []string) {
 	fields := strings.Fields(ed)
 	args := append(fields[1:], path)
 	return fields[0], args
-}
-
-// runYq pipes input through `yq eval <expr>`, used to filter the YAML shown in
-// the detail view. Returns a clear error if yq is not installed.
-func runYq(expr, input string) (string, error) {
-	if _, err := exec.LookPath("yq"); err != nil {
-		return "", fmt.Errorf("yq is not installed")
-	}
-	cmd := exec.Command("yq", "eval", expr, "-")
-	cmd.Stdin = strings.NewReader(input)
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(errb.String()); msg != "" {
-			return "", errors.New(msg)
-		}
-		return "", err
-	}
-	return out.String(), nil
 }

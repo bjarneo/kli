@@ -48,7 +48,7 @@ workloads show scale and restart.
 | Context | Keys |
 | --- | --- |
 | Logs | `f` follow, `g` / `G` top / bottom, `esc` back |
-| Detail (YAML) | `↑↓` scroll, `g` / `G` top / bottom, `e` edit, `|` yq filter, `esc` back |
+| Detail (YAML) | `↑↓` scroll, `g` / `G` top / bottom, `e` edit, `esc` back |
 | Shell / editor | keys go to the program; `Ctrl+\` detaches (cancels an edit) |
 | Pickers / palette | `↑↓` move, `enter` select, `esc` cancel |
 | Confirm | `y` confirm, `n` / `esc` cancel |

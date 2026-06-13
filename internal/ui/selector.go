@@ -20,7 +20,6 @@ const (
 	selContainer
 	selExecContainer
 	selScale
-	selYqFilter
 )
 
 const selMaxVisible = 12

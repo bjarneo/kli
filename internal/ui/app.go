@@ -554,10 +554,6 @@ func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case key.Matches(msg, a.keys.Edit):
 		return a.editTarget(a.detailTarget)
-	case msg.String() == "|":
-		a.sel.open(selYqFilter, "yq filter", "e.g. .spec.containers[].image (empty resets)", nil, true)
-		a.overlay = overlaySelector
-		return a, nil
 	case key.Matches(msg, a.keys.Top):
 		a.detail.vp.GotoTop()
 		return a, nil
@@ -1139,19 +1135,6 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 		}
 		t := a.scaleTarget
 		return a, scaleCmd(a.client, t.res, t.ns, t.name, n)
-	case selYqFilter:
-		expr := strings.TrimSpace(res.value)
-		if expr == "" || expr == "." {
-			a.detail.setFiltered(a.detail.raw)
-			return a, nil
-		}
-		out, err := runYq(expr, a.detail.raw)
-		if err != nil {
-			a.setStatus("yq: "+trimErr(err), true)
-			return a, nil
-		}
-		a.detail.setFiltered(out)
-		return a, nil
 	}
 	return a, nil
 }
@@ -1404,7 +1387,7 @@ func (a App) hints() []hint {
 	}
 	switch a.screen {
 	case screenDetail:
-		return []hint{{"↑↓", "scroll"}, {"e", "edit"}, {"|", "yq"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"e", "edit"}, {"esc", "back"}}
 	case screenLogs:
 		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"esc", "back"}}
 	case screenCockpit:

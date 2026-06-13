@@ -6,13 +6,11 @@ import (
 )
 
 // detailView shows a single object's YAML in a scrollable viewport with
-// theme-aware syntax highlighting. It keeps the raw YAML so it can re-render or
-// apply a yq filter.
+// theme-aware syntax highlighting.
 type detailView struct {
 	th    Theme
 	vp    viewport.Model
 	title string
-	raw   string // original YAML, for re-highlight and yq filtering
 }
 
 func newDetailView(th Theme) detailView {
@@ -30,21 +28,13 @@ func (d *detailView) setSize(w, h int) {
 // setMessage shows plain (unhighlighted) text such as "loading…" or an error.
 func (d *detailView) setMessage(title, body string) {
 	d.title = title
-	d.raw = ""
 	d.vp.SetContent(body)
 	d.vp.GotoTop()
 }
 
-// setYAML stores and renders highlighted YAML.
+// setYAML renders highlighted YAML.
 func (d *detailView) setYAML(title, yaml string) {
 	d.title = title
-	d.raw = yaml
-	d.vp.SetContent(highlightYAML(yaml, d.th))
-	d.vp.GotoTop()
-}
-
-// setFiltered renders a yq-filtered result without discarding the raw YAML.
-func (d *detailView) setFiltered(yaml string) {
 	d.vp.SetContent(highlightYAML(yaml, d.th))
 	d.vp.GotoTop()
 }
