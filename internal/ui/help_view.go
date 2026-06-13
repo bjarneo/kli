@@ -4,20 +4,53 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // helpView renders all keybindings grouped into columns.
 type helpView struct {
-	th   Theme
-	keys keyMap
+	th     Theme
+	keys   keyMap
+	offset int
 }
 
 func newHelpView(th Theme, keys keyMap) helpView {
 	return helpView{th: th, keys: keys}
 }
 
+func (h *helpView) reset() {
+	h.offset = 0
+}
+
+func (h helpView) Update(msg tea.KeyMsg) helpView {
+	switch msg.String() {
+	case "up", "k", "ctrl+p":
+		if h.offset > 0 {
+			h.offset--
+		}
+	case "down", "j", "ctrl+n":
+		h.offset++
+	case "pgup", "ctrl+u":
+		h.offset -= 5
+		if h.offset < 0 {
+			h.offset = 0
+		}
+	case "pgdown", "ctrl+d":
+		h.offset += 5
+	case "g", "home":
+		h.offset = 0
+	}
+	return h
+}
+
 func (h helpView) View(width, height int) string {
+	if height < 4 {
+		return clampBlock(h.th.ModalTitle.Render("Keybindings"), width, height)
+	}
+	if h.offset < 0 {
+		h.offset = 0
+	}
 	groups := h.keys.groups()
 	colW := 26
 	if w := width - 6; w < colW {
@@ -59,11 +92,40 @@ func (h helpView) View(width, height int) string {
 		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, blocks[i:end]...))
 	}
 	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	gridLines := strings.Split(grid, "\n")
+
+	border := h.th.ModalBorder
+	spacer := "\n\n"
+	frameRows := 6 // border/padding plus title and blank spacer
+	if height < 7 {
+		border = border.Padding(0, 1)
+		spacer = "\n"
+		frameRows = 3 // border plus title line
+	}
+	visible := height - frameRows
+	if visible < 1 {
+		visible = 1
+	}
+	maxOffset := len(gridLines) - visible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if h.offset > maxOffset {
+		h.offset = maxOffset
+	}
+	end := h.offset + visible
+	if end > len(gridLines) {
+		end = len(gridLines)
+	}
+	grid = strings.Join(gridLines[h.offset:end], "\n")
 
 	title := h.th.ModalTitle.Render("Keybindings")
 	hint := h.th.Dim.Render("  ? or esc to close")
-	content := title + hint + "\n\n" + grid
+	if maxOffset > 0 {
+		hint = h.th.Dim.Render(fmt.Sprintf("  ↑↓ scroll %d/%d · esc close", h.offset+1, maxOffset+1))
+	}
+	content := title + hint + spacer + grid
 
-	box := h.th.ModalBorder.Render(content)
+	box := border.Render(content)
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }

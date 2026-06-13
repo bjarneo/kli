@@ -411,7 +411,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case overlayHelp:
 		if key.Matches(msg, a.keys.Help, a.keys.Back) || msg.String() == "q" {
 			a.overlay = overlayNone
+			return a, nil
 		}
+		a.help = a.help.Update(msg)
 		return a, nil
 	case overlayConfirm:
 		return a.updateConfirm(msg)
@@ -437,6 +439,7 @@ func (a App) updateCockpit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.logs.stop()
 		return a, tea.Quit
 	case key.Matches(msg, a.keys.Help):
+		a.help.reset()
 		a.overlay = overlayHelp
 		return a, nil
 	case key.Matches(msg, a.keys.Palette):
@@ -491,6 +494,7 @@ func (a App) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case key.Matches(msg, a.keys.Help):
+		a.help.reset()
 		a.overlay = overlayHelp
 		return a, nil
 	case key.Matches(msg, a.keys.Palette):
@@ -1380,6 +1384,7 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		a.table.toggleWide()
 		return a, nil
 	case "cmd:help":
+		a.help.reset()
 		a.overlay = overlayHelp
 		return a, nil
 	case "cmd:quit":

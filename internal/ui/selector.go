@@ -24,6 +24,23 @@ const (
 
 const selMaxVisible = 12
 
+func selectorVisibleRows(height int) int {
+	visible := height - 7 // normal modal frame plus title, input, and rule
+	if height < 8 {
+		visible = height - 4 // compact frame plus title and input
+	}
+	if visible < 0 {
+		return 0
+	}
+	if visible < 1 {
+		return 1
+	}
+	if visible > selMaxVisible {
+		return selMaxVisible
+	}
+	return visible
+}
+
 // selItem is one selectable entry. id is the stable value passed back to the
 // app when chosen; title/desc are shown and matched against.
 type selItem struct {
@@ -159,6 +176,10 @@ func (s selector) Update(msg tea.Msg) (selector, selResult, tea.Cmd) {
 }
 
 func (s selector) View(width, height int) string {
+	if height < 4 {
+		return clampBlock(s.th.ModalTitle.Render(s.title)+"\n"+s.input.View(), width, height)
+	}
+	compact := height < 8
 	boxW := width * 2 / 3
 	if boxW > 84 {
 		boxW = 84
@@ -173,7 +194,13 @@ func (s selector) View(width, height int) string {
 	if boxW < 8 {
 		boxW = 8
 	}
-	inner := boxW - 6 // account for border (2) + padding (4)
+	frameW := 6 // border (2) + padding (4)
+	border := s.th.ModalBorder
+	if compact {
+		frameW = 4 // border (2) + compact padding (2)
+		border = border.Padding(0, 1)
+	}
+	inner := boxW - frameW
 	if inner < 1 {
 		inner = 1
 	}
@@ -182,11 +209,17 @@ func (s selector) View(width, height int) string {
 	b.WriteString(s.th.ModalTitle.Render(s.title))
 	b.WriteString("\n")
 	b.WriteString(s.input.View())
-	b.WriteString("\n")
-	b.WriteString(s.th.Rule.Render(strings.Repeat("─", inner)))
-	b.WriteString("\n")
+	if !compact {
+		b.WriteString("\n")
+		b.WriteString(s.th.Rule.Render(strings.Repeat("─", inner)))
+	}
 
+	visible := selectorVisibleRows(height)
+	if visible > 0 {
+		b.WriteString("\n")
+	}
 	switch {
+	case visible == 0:
 	case s.loading:
 		b.WriteString(s.th.Dim.Render("  loading…"))
 	case len(s.match) == 0:
@@ -196,11 +229,21 @@ func (s selector) View(width, height int) string {
 			b.WriteString(s.th.Dim.Render("  no matches"))
 		}
 	default:
-		end := s.offset + selMaxVisible
+		offset := s.offset
+		if s.cursor < offset {
+			offset = s.cursor
+		}
+		if s.cursor >= offset+visible {
+			offset = s.cursor - visible + 1
+		}
+		if offset < 0 {
+			offset = 0
+		}
+		end := offset + visible
 		if end > len(s.match) {
 			end = len(s.match)
 		}
-		for i := s.offset; i < end; i++ {
+		for i := offset; i < end; i++ {
 			it := s.items[s.match[i]]
 			line := s.renderItem(it, inner, i == s.cursor)
 			b.WriteString(line)
@@ -210,7 +253,7 @@ func (s selector) View(width, height int) string {
 		}
 	}
 
-	box := s.th.ModalBorder.Width(boxW).Render(b.String())
+	box := border.Width(boxW).Render(b.String())
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
