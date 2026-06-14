@@ -75,7 +75,7 @@ func TestAppSmoke(t *testing.T) {
 
 	for _, themeName := range []string{"ansi", "tokyonight"} {
 		th := PickTheme(themeName)
-		app := NewApp(cl, th)
+		app := NewApp(cl, th, defaultNavCatalog())
 		var m tea.Model = app
 
 		// Try several terminal sizes including very small.
