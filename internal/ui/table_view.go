@@ -100,7 +100,6 @@ func (v *tableView) scrollLeft() bool {
 		return false
 	}
 	v.hoff--
-	v.rebuild()
 	return true
 }
 
@@ -109,7 +108,6 @@ func (v *tableView) scrollRight() bool {
 		return false
 	}
 	v.hoff++
-	v.rebuild()
 	return true
 }
 
