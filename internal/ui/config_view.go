@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	apiresource "k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/bjarneo/kli/internal/k8s"
 )
@@ -17,7 +18,7 @@ import (
 const configKeyWidth = 14
 
 // configView renders a curated, read-only configuration summary for common
-// Kubernetes objects. Raw YAML remains available through the detail view.
+// Kubernetes objects.
 type configView struct {
 	th    Theme
 	vp    viewport.Model
@@ -44,10 +45,10 @@ func (c *configView) setMessage(title, body string) {
 	c.vp.GotoTop()
 }
 
-func (c *configView) setObject(res k8s.ResourceInfo, title string, obj map[string]interface{}) {
+func (c *configView) setObject(res k8s.ResourceInfo, title string, obj map[string]interface{}, usage *k8s.PodUsage) {
 	c.title = title
 	c.label = strings.ToLower(res.Kind) + " config"
-	c.vp.SetContent(renderConfig(c.th, res, obj, c.vp.Width))
+	c.vp.SetContent(renderConfig(c.th, res, obj, c.vp.Width, usage))
 	c.vp.GotoTop()
 }
 
@@ -65,7 +66,7 @@ func (c configView) View() string {
 
 type configRow struct{ key, value string }
 
-func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, width int) string {
+func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, width int, usage *k8s.PodUsage) string {
 	var lines []string
 	add := func(title string, rows []configRow) {
 		if len(rows) == 0 {
@@ -79,33 +80,48 @@ func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, wi
 			lines = append(lines, configKV(th, r.key, r.value, width))
 		}
 	}
+	addOverview := func() { add("Overview", overviewRows(res, obj)) }
 
-	add("Overview", overviewRows(res, obj))
 	switch strings.ToLower(res.Resource) {
 	case "deployments", "statefulsets", "daemonsets", "replicasets", "replicationcontrollers":
-		add("Workload", workloadRows(obj))
+		add("Status", workloadRows(obj))
+		add("Conditions", conditionRows(obj))
+		addOverview()
 		addPodSpecSections(th, obj, []string{"spec", "template", "spec"}, add)
 	case "jobs":
+		add("Status", jobStatusRows(obj))
+		add("Conditions", conditionRows(obj))
+		addOverview()
 		add("Job", jobRows(obj))
 		addPodSpecSections(th, obj, []string{"spec", "template", "spec"}, add)
 	case "cronjobs":
+		add("Status", cronJobStatusRows(obj))
+		addOverview()
 		add("Schedule", cronJobRows(obj))
 		addPodSpecSections(th, obj, []string{"spec", "jobTemplate", "spec", "template", "spec"}, add)
 	case "pods":
+		add("Usage", podUsageRows(th, obj, usage))
+		add("Health", podHealthRows(th, obj))
+		addOverview()
 		add("Pod", podRows(obj))
 		addPodSpecSections(th, obj, []string{"spec"}, add)
 	case "configmaps":
+		addOverview()
 		add("ConfigMap", configMapSummaryRows(obj))
 		add("Data", configMapDataRows(obj, width))
 		add("Binary Data", dataKeyRows(obj, []string{"binaryData"}, "encoded"))
 	case "secrets":
+		addOverview()
 		add("Secret", secretRows(obj))
 		add("Decoded Data", secretDataRows(th, obj, width))
 	case "services":
+		addOverview()
 		add("Service", serviceRows(obj))
 	case "ingresses":
+		addOverview()
 		add("Ingress", ingressRows(obj))
 	default:
+		addOverview()
 		add("Spec", genericSpecRows(obj))
 	}
 	if len(lines) == 0 {
@@ -175,17 +191,30 @@ func jobRows(obj map[string]interface{}) []configRow {
 		{"completions", scalarOrDash(obj, "spec", "completions")},
 		{"parallelism", scalarOrDash(obj, "spec", "parallelism")},
 		{"backoff", scalarOrDash(obj, "spec", "backoffLimit")},
-		{"status", jobStatus(obj)},
+	}
+}
+
+func jobStatusRows(obj map[string]interface{}) []configRow {
+	return []configRow{
+		{"succeeded", scalarOrDash(obj, "status", "succeeded")},
+		{"active", scalarOrDash(obj, "status", "active")},
+		{"failed", scalarOrDash(obj, "status", "failed")},
+		{"ready", scalarOrDash(obj, "status", "ready")},
 	}
 }
 
 func cronJobRows(obj map[string]interface{}) []configRow {
-	rows := []configRow{
+	return []configRow{
 		{"schedule", scalarOrDash(obj, "spec", "schedule")},
-		{"suspend", scalarOrDash(obj, "spec", "suspend")},
 		{"concurrency", scalarOrDash(obj, "spec", "concurrencyPolicy")},
 		{"successful", scalarOrDash(obj, "spec", "successfulJobsHistoryLimit")},
 		{"failed", scalarOrDash(obj, "spec", "failedJobsHistoryLimit")},
+	}
+}
+
+func cronJobStatusRows(obj map[string]interface{}) []configRow {
+	rows := []configRow{
+		{"suspend", scalarOrDash(obj, "spec", "suspend")},
 	}
 	if active, ok := sliceAt(obj, "status", "active"); ok {
 		rows = append(rows, configRow{"active jobs", countSummary(len(active), "job")})
@@ -193,12 +222,48 @@ func cronJobRows(obj map[string]interface{}) []configRow {
 	if v, ok := stringAt(obj, "status", "lastScheduleTime"); ok {
 		rows = append(rows, configRow{"last run", v})
 	}
+	if v, ok := stringAt(obj, "status", "lastSuccessfulTime"); ok {
+		rows = append(rows, configRow{"last success", v})
+	}
+	return rows
+}
+
+func podUsageRows(th Theme, obj map[string]interface{}, usage *k8s.PodUsage) []configRow {
+	var rows []configRow
+	if usage != nil {
+		rows = append(rows,
+			configRow{"cpu", fmt.Sprintf("%dm live", usage.CPUUsedMilli)},
+			configRow{"memory", fmt.Sprintf("%dMi live", usage.MemUsedBytes/(1024*1024))},
+		)
+	} else {
+		rows = append(rows, configRow{"live usage", th.Dim.Render("metrics unavailable")})
+	}
+	if s := podResourceSummary(obj, "requests"); s != "" {
+		rows = append(rows, configRow{"requests", s})
+	}
+	if s := podResourceSummary(obj, "limits"); s != "" {
+		rows = append(rows, configRow{"limits", s})
+	}
+	return rows
+}
+
+func podHealthRows(th Theme, obj map[string]interface{}) []configRow {
+	rows := []configRow{
+		{"phase", scalarOrDash(obj, "status", "phase")},
+		{"ready", podConditionSummary(obj, "Ready")},
+		{"restarts", fmt.Sprintf("%d", podRestartCount(obj))},
+	}
+	issues := podIssues(obj)
+	if len(issues) == 0 {
+		rows = append(rows, configRow{"issues", th.Good.Render("none")})
+		return rows
+	}
+	rows = append(rows, configRow{"issues", th.Bad.Render(joinWithMore(issues, 3))})
 	return rows
 }
 
 func podRows(obj map[string]interface{}) []configRow {
 	rows := []configRow{
-		{"phase", scalarOrDash(obj, "status", "phase")},
 		{"node", scalarOrDash(obj, "spec", "nodeName")},
 		{"restart", scalarOrDash(obj, "spec", "restartPolicy")},
 		{"service acct", scalarOrDash(obj, "spec", "serviceAccountName")},
@@ -207,6 +272,214 @@ func podRows(obj map[string]interface{}) []configRow {
 		rows = append(rows, configRow{"pod ip", v})
 	}
 	return rows
+}
+
+func conditionRows(obj map[string]interface{}) []configRow {
+	conditions, ok := sliceAt(obj, "status", "conditions")
+	if !ok {
+		return nil
+	}
+	parts := make([]string, 0, len(conditions))
+	for _, item := range conditions {
+		c, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		typ, _ := scalarString(c["type"])
+		status, _ := scalarString(c["status"])
+		if typ == "" || status == "" {
+			continue
+		}
+		part := typ + "=" + status
+		if reason, _ := scalarString(c["reason"]); reason != "" {
+			part += " (" + reason + ")"
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return []configRow{{"conditions", joinWithMore(parts, 4)}}
+}
+
+func podResourceSummary(obj map[string]interface{}, field string) string {
+	cpu, mem, hasCPU, hasMem := podResourceTotals(obj, field)
+	var parts []string
+	if hasCPU {
+		parts = append(parts, fmt.Sprintf("cpu %dm", cpu))
+	}
+	if hasMem {
+		parts = append(parts, fmt.Sprintf("mem %dMi", mem/(1024*1024)))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func podResourceTotals(obj map[string]interface{}, field string) (cpuMilli, memBytes int64, hasCPU, hasMem bool) {
+	containers, ok := sliceAt(obj, "spec", "containers")
+	if !ok {
+		return 0, 0, false, false
+	}
+	for _, item := range containers {
+		c, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		resources, ok := asMap(c["resources"])
+		if !ok {
+			continue
+		}
+		values, ok := asMap(resources[field])
+		if !ok {
+			continue
+		}
+		if q, ok := resourceQuantity(values, "cpu"); ok {
+			cpuMilli += q.MilliValue()
+			hasCPU = true
+		}
+		if q, ok := resourceQuantity(values, "memory"); ok {
+			memBytes += q.Value()
+			hasMem = true
+		}
+	}
+	return cpuMilli, memBytes, hasCPU, hasMem
+}
+
+func resourceQuantity(m map[string]interface{}, key string) (apiresource.Quantity, bool) {
+	s, ok := scalarString(m[key])
+	if !ok || s == "" {
+		return apiresource.Quantity{}, false
+	}
+	q, err := apiresource.ParseQuantity(s)
+	if err != nil {
+		return apiresource.Quantity{}, false
+	}
+	return q, true
+}
+
+func podConditionSummary(obj map[string]interface{}, want string) string {
+	conditions, ok := sliceAt(obj, "status", "conditions")
+	if !ok {
+		return "-"
+	}
+	for _, item := range conditions {
+		c, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		typ, _ := scalarString(c["type"])
+		if typ != want {
+			continue
+		}
+		status, _ := scalarString(c["status"])
+		if reason, _ := scalarString(c["reason"]); reason != "" {
+			return status + " (" + reason + ")"
+		}
+		if status != "" {
+			return status
+		}
+	}
+	return "-"
+}
+
+func podRestartCount(obj map[string]interface{}) int64 {
+	var total int64
+	for _, field := range []string{"initContainerStatuses", "containerStatuses"} {
+		statuses, ok := sliceAt(obj, "status", field)
+		if !ok {
+			continue
+		}
+		for _, item := range statuses {
+			st, ok := asMap(item)
+			if !ok {
+				continue
+			}
+			if n, ok := int64Value(st["restartCount"]); ok {
+				total += n
+			}
+		}
+	}
+	return total
+}
+
+func podIssues(obj map[string]interface{}) []string {
+	var out []string
+	for _, field := range []string{"initContainerStatuses", "containerStatuses"} {
+		statuses, ok := sliceAt(obj, "status", field)
+		if !ok {
+			continue
+		}
+		for _, item := range statuses {
+			st, ok := asMap(item)
+			if !ok {
+				continue
+			}
+			name, _ := scalarString(st["name"])
+			if issue := containerIssue(name, st); issue != "" {
+				out = append(out, issue)
+			}
+		}
+	}
+	return append(out, podConditionIssues(obj)...)
+}
+
+func containerIssue(name string, st map[string]interface{}) string {
+	state, ok := asMap(st["state"])
+	if !ok {
+		return ""
+	}
+	prefix := "container"
+	if name != "" {
+		prefix = name
+	}
+	if waiting, ok := asMap(state["waiting"]); ok {
+		reason := compactValue(waiting["reason"])
+		if reason == "" || reason == "-" {
+			reason = "waiting"
+		}
+		return prefix + " " + reason
+	}
+	if terminated, ok := asMap(state["terminated"]); ok {
+		reason := compactValue(terminated["reason"])
+		if reason == "Completed" || reason == "Succeeded" {
+			return ""
+		}
+		if reason == "" || reason == "-" {
+			reason = "terminated"
+		}
+		if code := compactValue(terminated["exitCode"]); code != "" && code != "-" {
+			reason += " exit " + code
+		}
+		return prefix + " " + reason
+	}
+	return ""
+}
+
+func podConditionIssues(obj map[string]interface{}) []string {
+	conditions, ok := sliceAt(obj, "status", "conditions")
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, item := range conditions {
+		c, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		status, _ := scalarString(c["status"])
+		if status == "True" {
+			continue
+		}
+		typ, _ := scalarString(c["type"])
+		if typ == "" {
+			continue
+		}
+		part := typ + "=" + status
+		if reason, _ := scalarString(c["reason"]); reason != "" {
+			part += " (" + reason + ")"
+		}
+		out = append(out, part)
+	}
+	return out
 }
 
 func configMapSummaryRows(obj map[string]interface{}) []configRow {
@@ -423,12 +696,6 @@ func replicaSummary(obj map[string]interface{}) string {
 	available := scalarOrDash(obj, "status", "availableReplicas")
 	updated := scalarOrDash(obj, "status", "updatedReplicas")
 	return desired + " desired · " + ready + " ready · " + available + " available · " + updated + " updated"
-}
-
-func jobStatus(obj map[string]interface{}) string {
-	return scalarOrDash(obj, "status", "succeeded") + " succeeded · " +
-		scalarOrDash(obj, "status", "active") + " active · " +
-		scalarOrDash(obj, "status", "failed") + " failed"
 }
 
 func selectorSummary(obj map[string]interface{}, path ...string) string {
@@ -682,6 +949,18 @@ func scalarString(v interface{}) (string, bool) {
 		return fmt.Sprintf("%g", t), true
 	}
 	return "", false
+}
+
+func int64Value(v interface{}) (int64, bool) {
+	switch t := v.(type) {
+	case int:
+		return int64(t), true
+	case int64:
+		return t, true
+	case float64:
+		return int64(t), true
+	}
+	return 0, false
 }
 
 func compactValue(v interface{}) string {

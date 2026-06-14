@@ -16,6 +16,12 @@ type nodeUsage struct {
 	memBytes int64
 }
 
+// PodUsage is a live CPU and memory sample for a single pod.
+type PodUsage struct {
+	CPUUsedMilli int64
+	MemUsedBytes int64
+}
+
 // AppendNodeStats augments a nodes table with live CPU and memory usage from
 // the metrics API (metrics.k8s.io). It is best-effort: if metrics are
 // unavailable it returns an error and leaves the table unchanged.
@@ -81,6 +87,19 @@ func (c *Client) AppendPodStats(ctx context.Context, t *Table, namespace string)
 			fmt.Sprintf("%dMi", u.memBytes/(1024*1024)))
 	}
 	return nil
+}
+
+// PodUsage fetches live CPU and memory usage for one pod from metrics.k8s.io.
+func (c *Client) PodUsage(ctx context.Context, namespace, pod string) (PodUsage, error) {
+	usage, err := c.podUsage(ctx, namespace)
+	if err != nil {
+		return PodUsage{}, err
+	}
+	u, ok := usage[namespace+"/"+pod]
+	if !ok {
+		return PodUsage{}, fmt.Errorf("pod metrics not found")
+	}
+	return PodUsage{CPUUsedMilli: u.cpuMilli, MemUsedBytes: u.memBytes}, nil
 }
 
 func (c *Client) podUsage(ctx context.Context, namespace string) (map[string]nodeUsage, error) {

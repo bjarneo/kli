@@ -294,7 +294,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.err != nil {
 				a.config.setMessage(m.title, "Error: "+m.err.Error())
 			} else {
-				a.config.setObject(m.res, m.title, m.obj)
+				a.config.setObject(m.res, m.title, m.obj, m.usage)
 			}
 		}
 		return a, nil

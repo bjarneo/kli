@@ -45,6 +45,7 @@ type configLoadedMsg struct {
 	ns, name string
 	title    string
 	obj      map[string]interface{}
+	usage    *k8s.PodUsage
 	err      error
 }
 
@@ -146,11 +147,17 @@ func loadConfigCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 		ctx, cancel := opCtx()
 		defer cancel()
 		obj, err := cl.GetObject(ctx, res, ns, name)
+		var usage *k8s.PodUsage
+		if err == nil && res.IsPod() && ns != "" {
+			if u, uerr := cl.PodUsage(ctx, ns, name); uerr == nil {
+				usage = &u
+			}
+		}
 		title := res.Resource + "/" + name
 		if ns != "" {
 			title = ns + "/" + name
 		}
-		return configLoadedMsg{res: res, ns: ns, name: name, title: title, obj: obj, err: err}
+		return configLoadedMsg{res: res, ns: ns, name: name, title: title, obj: obj, usage: usage, err: err}
 	}
 }
 
