@@ -28,7 +28,15 @@ type tableView struct {
 	allRows []k8s.Row    // unfiltered
 	rows    []k8s.Row    // currently displayed (filtered + sorted)
 	vis     []int        // visible column indices (parallel to widths)
-	widths  []int        // fitted widths for visible columns
+	widths  []int        // natural (capped/floored) widths for visible columns
+
+	// Horizontal scroll, used when the columns are wider than the viewport. The
+	// first column is frozen so rows stay identifiable; hoff is how many of the
+	// remaining columns are scrolled off the left edge.
+	overflow bool
+	hoff     int
+	maxHoff  int
+	frozenW  int // rendered width of the frozen first column when overflowing
 
 	filtering bool
 	filter    textinput.Model
@@ -76,7 +84,33 @@ func (v *tableView) setData(t *k8s.Table) {
 
 func (v *tableView) toggleWide() {
 	v.showWide = !v.showWide
+	v.hoff = 0 // the column set changed; start from the left
 	v.rebuild()
+}
+
+// resetHScroll returns the horizontal scroll to the leftmost column. Used when
+// switching resources, whose column sets differ.
+func (v *tableView) resetHScroll() { v.hoff = 0 }
+
+// scrollLeft/scrollRight move the horizontal column window by one column. They
+// report whether anything moved, so the caller can fall back to other behavior
+// (e.g. focusing the sidebar) when already at the edge.
+func (v *tableView) scrollLeft() bool {
+	if !v.overflow || v.hoff <= 0 {
+		return false
+	}
+	v.hoff--
+	v.rebuild()
+	return true
+}
+
+func (v *tableView) scrollRight() bool {
+	if !v.overflow || v.hoff >= v.maxHoff {
+		return false
+	}
+	v.hoff++
+	v.rebuild()
+	return true
 }
 
 func (v *tableView) startFilter() {
@@ -185,7 +219,7 @@ func (v *tableView) rebuild() {
 		}
 	}
 
-	v.widths = v.fitWidths(v.vis)
+	v.computeLayout()
 
 	if v.cursor >= len(v.rows) {
 		v.cursor = len(v.rows) - 1
@@ -196,8 +230,13 @@ func (v *tableView) rebuild() {
 	v.ensureVisible()
 }
 
-func (v *tableView) fitWidths(vis []int) []int {
-	widths := make([]int, len(vis))
+// computeLayout sizes each visible column to its natural (content) width and
+// decides whether the row is wider than the viewport. When it overflows, the
+// first column is frozen and the rest become horizontally scrollable; otherwise
+// every column is shown. It clamps the scroll offset to the valid range.
+func (v *tableView) computeLayout() {
+	vis := v.vis
+	v.widths = make([]int, len(vis))
 	for n, ci := range vis {
 		w := len(v.cols[ci].Name)
 		if ci == v.sortCol {
@@ -218,49 +257,79 @@ func (v *tableView) fitWidths(vis []int) []int {
 		if w < floor {
 			w = floor
 		}
-		widths[n] = w
+		v.widths[n] = w
 	}
 
-	// Budget excludes the 2 cells of horizontal padding per column.
-	budget := v.width - 2*len(vis)
-	if budget < len(vis) {
-		return widths
+	// cellW counts a column's two padding cells alongside its content width.
+	cellW := func(n int) int { return v.widths[n] + 2 }
+
+	total := 0
+	for n := range vis {
+		total += cellW(n)
 	}
-	for sum(widths) > budget {
-		// Shrink the widest column above its floor; protect the name column.
-		target, best := -1, -1
-		for n, ci := range vis {
-			floor := colFloor
-			isName := strings.EqualFold(v.cols[ci].Name, "name")
-			if isName {
-				floor = nameFloor
-			}
-			if widths[n] <= floor {
-				continue
-			}
-			weight := widths[n]
-			if isName {
-				weight -= 1000
-			}
-			if weight > best {
-				best = weight
-				target = n
-			}
-		}
-		if target < 0 {
+	v.overflow = len(vis) > 1 && total > v.width
+	if !v.overflow {
+		v.hoff, v.maxHoff, v.frozenW = 0, 0, 0
+		return
+	}
+
+	// Freeze the first column, but cap it so at least part of one scrolling
+	// column always has room (a very long name shouldn't eat the whole row).
+	v.frozenW = v.widths[0]
+	if cap := v.width/2 - 2; v.frozenW > cap && cap >= nameFloor {
+		v.frozenW = cap
+	}
+	avail := v.width - (v.frozenW + 2)
+
+	// maxHoff is the smallest offset that still lets the last column fit: walk
+	// the scrollable columns from the right, accumulating until they overflow.
+	minStart := len(vis)
+	used := 0
+	for n := len(vis) - 1; n >= 1; n-- {
+		used += cellW(n)
+		if used > avail {
 			break
 		}
-		widths[target]--
+		minStart = n
 	}
-	return widths
+	v.maxHoff = minStart - 1
+	if v.maxHoff < 0 {
+		v.maxHoff = 0
+	}
+	v.hoff = clamp(v.hoff, 0, v.maxHoff)
 }
 
-func sum(xs []int) int {
-	t := 0
-	for _, x := range xs {
-		t += x
+// colSlot is one column to render: its index into vis and its rendered width.
+type colSlot struct {
+	n     int
+	width int
+}
+
+// renderPlan lists the columns to draw left-to-right for the current scroll
+// position. Without overflow that is simply every visible column; with overflow
+// it is the frozen first column followed by as many scrolling columns as fit.
+func (v tableView) renderPlan() []colSlot {
+	if len(v.vis) == 0 {
+		return nil
 	}
-	return t
+	if !v.overflow {
+		plan := make([]colSlot, len(v.vis))
+		for n := range v.vis {
+			plan[n] = colSlot{n: n, width: v.widths[n]}
+		}
+		return plan
+	}
+	plan := []colSlot{{n: 0, width: v.frozenW}}
+	used := v.frozenW + 2
+	for n := 1 + v.hoff; n < len(v.vis); n++ {
+		w := v.widths[n] + 2
+		if used+w > v.width && len(plan) > 1 {
+			break
+		}
+		plan = append(plan, colSlot{n: n, width: v.widths[n]})
+		used += w
+	}
+	return plan
 }
 
 // --- navigation -------------------------------------------------------------
@@ -307,10 +376,10 @@ func (v *tableView) colAt(x int) (int, bool) {
 		return 0, false
 	}
 	pos := 0
-	for n, ci := range v.vis {
-		w := v.widths[n] + 2 // one leading and one trailing cell of padding
+	for _, cs := range v.renderPlan() {
+		w := cs.width + 2 // one leading and one trailing cell of padding
 		if x >= pos && x < pos+w {
-			return ci, true
+			return v.vis[cs.n], true
 		}
 		pos += w
 	}
@@ -384,8 +453,10 @@ func (v tableView) View() string {
 }
 
 func (v tableView) headerLine() string {
+	plan := v.renderPlan()
 	var b strings.Builder
-	for n, ci := range v.vis {
+	for slot, cs := range plan {
+		ci := v.vis[cs.n]
 		title := strings.ToUpper(v.cols[ci].Name)
 		if ci == v.sortCol {
 			if v.sortDesc {
@@ -394,16 +465,27 @@ func (v tableView) headerLine() string {
 				title += " ▲"
 			}
 		}
-		b.WriteString(" " + v.th.HeaderVal.Render(cellFit(title, v.widths[n])) + " ")
+		// Arrow hints mark that columns are scrolled off either edge.
+		if v.overflow {
+			if slot == 0 && v.hoff > 0 {
+				title = "‹" + title
+			}
+			if slot == len(plan)-1 && cs.n < len(v.vis)-1 {
+				title = strings.TrimRight(cellFit(title, cs.width-1), " ") + "›"
+			}
+		}
+		b.WriteString(" " + v.th.HeaderVal.Render(cellFit(title, cs.width)) + " ")
 	}
 	return b.String()
 }
 
 func (v tableView) renderRow(row k8s.Row, selected bool) string {
+	plan := v.renderPlan()
 	var b strings.Builder
-	for n, ci := range v.vis {
+	for _, cs := range plan {
+		ci := v.vis[cs.n]
 		val := cell(row.Cells, ci)
-		txt := cellFit(val, v.widths[n])
+		txt := cellFit(val, cs.width)
 		if selected {
 			b.WriteString(" " + txt + " ") // colored later via the whole-row highlight
 		} else {

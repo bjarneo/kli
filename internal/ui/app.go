@@ -754,10 +754,25 @@ func (a App) updateSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a App) updateMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case msg.String() == "left" || msg.String() == "h":
+	case msg.String() == "left":
+		// Scroll the table left first; only jump to the sidebar once it is already
+		// at its leftmost column, so wide tables stay reachable on small screens.
+		if a.table.scrollLeft() {
+			return a, nil
+		}
 		if a.sidebarVisible() {
 			a.focus = focusSidebar
 		}
+		return a, nil
+	case msg.String() == "h":
+		// h keeps its original meaning (focus the sidebar); only the arrows scroll.
+		if a.sidebarVisible() {
+			a.focus = focusSidebar
+		}
+		return a, nil
+	case msg.String() == "right":
+		// `l` is the Logs shortcut, so only the right arrow scrolls columns.
+		a.table.scrollRight()
 		return a, nil
 	case key.Matches(msg, a.keys.Enter):
 		return a.openConfig()
@@ -944,7 +959,8 @@ func (a *App) useResource(ri k8s.ResourceInfo) {
 	a.focus = focusMain
 	a.sidebar.syncTo(ri.Key())
 	a.table.stopFilter(true)
-	a.table.resetSort() // columns differ per resource
+	a.table.resetSort()    // columns differ per resource
+	a.table.resetHScroll() // restart horizontal scroll from the left
 	a.table.setData(nil)
 }
 

@@ -14,6 +14,7 @@ type keyMap struct {
 	HalfDown key.Binding
 	Top      key.Binding
 	Bottom   key.Binding
+	HScroll  key.Binding
 
 	// row actions
 	Enter      key.Binding
@@ -60,6 +61,7 @@ func defaultKeys() keyMap {
 		HalfDown: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("^d", "½ page down")),
 		Top:      key.NewBinding(key.WithKeys("g", "home"), key.WithHelp("g", "top")),
 		Bottom:   key.NewBinding(key.WithKeys("G", "end"), key.WithHelp("G", "bottom")),
+		HScroll:  key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "scroll columns")),
 
 		Enter:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "config")),
 		Describe:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "describe")),
@@ -101,7 +103,7 @@ type helpGroup struct {
 
 func (k keyMap) groups() []helpGroup {
 	return []helpGroup{
-		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom}},
+		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom, k.HScroll}},
 		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Docs}},
 		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
