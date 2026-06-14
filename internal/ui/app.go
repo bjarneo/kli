@@ -200,6 +200,11 @@ func (a *App) setStatus(text string, isErr bool) {
 	a.statusErr = isErr
 }
 
+func (a *App) clearStatus() {
+	a.status = ""
+	a.statusErr = false
+}
+
 // --- Update -----------------------------------------------------------------
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -263,9 +268,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.setStatus(trimErr(m.err), true)
 		} else {
 			a.cockpit.setData(m.overview)
-			if !a.statusErr {
-				a.status = ""
-			}
+			a.clearStatus()
 		}
 		return a, nil
 
@@ -276,9 +279,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.setStatus(trimErr(m.err), true)
 			} else {
 				a.table.setData(m.tbl)
-				if !a.statusErr {
-					a.status = ""
-				}
+				a.clearStatus()
 			}
 		}
 		return a, nil

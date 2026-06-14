@@ -267,6 +267,47 @@ func TestUseResourceStartsOnTableScreen(t *testing.T) {
 	}
 }
 
+func TestSuccessfulLoadsClearErrorStatus(t *testing.T) {
+	client := &k8s.Client{}
+	res := k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	tests := []struct {
+		name string
+		app  App
+		msg  tea.Msg
+	}{
+		{
+			name: "resource load",
+			app: func() App {
+				app := App{client: client, res: res, screen: screenTable, loadSeq: 1, status: "old error", statusErr: true}
+				app.table = newTableView(PickTheme("ansi"))
+				return app
+			}(),
+			msg: resourcesLoadedMsg{client: client, seq: 1, res: res, tbl: fakeTable()},
+		},
+		{
+			name: "cockpit load",
+			app: App{
+				client:    client,
+				screen:    screenCockpit,
+				cockpit:   newCockpitView(PickTheme("ansi")),
+				loadSeq:   1,
+				status:    "old error",
+				statusErr: true,
+			},
+			msg: cockpitLoadedMsg{client: client, seq: 1, overview: fakeOverview()},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model, _ := tt.app.Update(tt.msg)
+			got := model.(App)
+			if got.status != "" || got.statusErr {
+				t.Fatalf("status = %q err=%t, want cleared", got.status, got.statusErr)
+			}
+		})
+	}
+}
+
 func mustRender(t *testing.T, m tea.Model, theme string, size [2]int) {
 	t.Helper()
 	defer func() {
