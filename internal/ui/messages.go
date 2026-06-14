@@ -26,13 +26,17 @@ type statusMsg struct {
 }
 
 type resourcesLoadedMsg struct {
-	res k8s.ResourceInfo
-	ns  string
-	tbl *k8s.Table
-	err error
+	client *k8s.Client
+	seq    int
+	res    k8s.ResourceInfo
+	ns     string
+	tbl    *k8s.Table
+	err    error
 }
 
 type detailLoadedMsg struct {
+	client   *k8s.Client
+	seq      int
 	res      k8s.ResourceInfo
 	ns, name string
 	title    string
@@ -41,6 +45,8 @@ type detailLoadedMsg struct {
 }
 
 type configLoadedMsg struct {
+	client   *k8s.Client
+	seq      int
 	res      k8s.ResourceInfo
 	ns, name string
 	title    string
@@ -79,6 +85,8 @@ type clientReadyMsg struct {
 }
 
 type cockpitLoadedMsg struct {
+	client   *k8s.Client
+	seq      int
 	overview *k8s.ClusterOverview
 	err      error
 }
@@ -117,7 +125,7 @@ func opCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
 }
 
-func loadResourceCmd(cl *k8s.Client, res k8s.ResourceInfo, ns string) tea.Cmd {
+func loadResourceCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
@@ -131,11 +139,11 @@ func loadResourceCmd(cl *k8s.Client, res k8s.ResourceInfo, ns string) tea.Cmd {
 				_ = cl.AppendPodStats(ctx, tbl, ns)
 			}
 		}
-		return resourcesLoadedMsg{res: res, ns: ns, tbl: tbl, err: err}
+		return resourcesLoadedMsg{client: cl, seq: seq, res: res, ns: ns, tbl: tbl, err: err}
 	}
 }
 
-func loadDetailCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cmd {
+func loadDetailCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns, name string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
@@ -144,11 +152,11 @@ func loadDetailCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 		if ns != "" {
 			title = ns + "/" + name
 		}
-		return detailLoadedMsg{res: res, ns: ns, name: name, title: title, yaml: y, err: err}
+		return detailLoadedMsg{client: cl, seq: seq, res: res, ns: ns, name: name, title: title, yaml: y, err: err}
 	}
 }
 
-func loadConfigCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cmd {
+func loadConfigCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns, name string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
@@ -163,7 +171,7 @@ func loadConfigCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 		if ns != "" {
 			title = ns + "/" + name
 		}
-		return configLoadedMsg{res: res, ns: ns, name: name, title: title, obj: obj, usage: usage, err: err}
+		return configLoadedMsg{client: cl, seq: seq, res: res, ns: ns, name: name, title: title, obj: obj, usage: usage, err: err}
 	}
 }
 
@@ -197,12 +205,12 @@ func deletePodCmd(cl *k8s.Client, ns, pod string) tea.Cmd {
 	}
 }
 
-func loadCockpitCmd(cl *k8s.Client) tea.Cmd {
+func loadCockpitCmd(cl *k8s.Client, seq int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
 		o, err := cl.ClusterStats(ctx)
-		return cockpitLoadedMsg{overview: o, err: err}
+		return cockpitLoadedMsg{client: cl, seq: seq, overview: o, err: err}
 	}
 }
 

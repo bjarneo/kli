@@ -103,6 +103,7 @@ type App struct {
 	execTarget   target
 
 	logSession int
+	loadSeq    int
 
 	spin      spinner.Model
 	loading   bool
@@ -156,9 +157,9 @@ func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
 func (a App) Init() tea.Cmd {
 	cmds := []tea.Cmd{a.spin.Tick, tickCmd()}
 	if a.screen == screenCockpit {
-		cmds = append(cmds, loadCockpitCmd(a.client))
+		cmds = append(cmds, loadCockpitCmd(a.client, a.loadSeq))
 	} else {
-		cmds = append(cmds, loadResourceCmd(a.client, a.res, a.namespace))
+		cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace))
 	}
 	return tea.Batch(cmds...)
 }
@@ -241,17 +242,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case a.screen == screenTable && a.overlay == overlayNone && !a.loading:
 			a.loading = true
-			cmds = append(cmds, loadResourceCmd(a.client, a.res, a.namespace), a.spin.Tick)
+			a.loadSeq++
+			cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace), a.spin.Tick)
 		case a.screen == screenCockpit && a.overlay == overlayNone && !a.loading &&
 			time.Time(m).Sub(a.cockpitAt) >= 5*time.Second:
 			// The cockpit aggregates many lists, so refresh it less often.
 			a.loading = true
 			a.cockpitAt = time.Time(m)
-			cmds = append(cmds, loadCockpitCmd(a.client), a.spin.Tick)
+			a.loadSeq++
+			cmds = append(cmds, loadCockpitCmd(a.client, a.loadSeq), a.spin.Tick)
 		}
 		return a, tea.Batch(cmds...)
 
 	case cockpitLoadedMsg:
+		if m.client != a.client || m.seq != a.loadSeq {
+			return a, nil
+		}
 		a.loading = false
 		if m.err != nil {
 			a.setStatus(trimErr(m.err), true)
@@ -264,7 +270,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case resourcesLoadedMsg:
-		if m.res.Key() == a.res.Key() && m.ns == a.namespace {
+		if m.client == a.client && m.seq == a.loadSeq && m.res.Key() == a.res.Key() && m.ns == a.namespace {
 			a.loading = false
 			if m.err != nil {
 				a.setStatus(trimErr(m.err), true)
@@ -280,7 +286,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detailLoadedMsg:
 		// Ignore a stale fetch: only apply if it matches the object currently
 		// being viewed (the user may have navigated away and back to another).
-		if a.screen == screenDetail &&
+		if m.client == a.client && m.seq == a.loadSeq && a.screen == screenDetail &&
 			m.res.Key() == a.detailTarget.res.Key() &&
 			m.ns == a.detailTarget.ns && m.name == a.detailTarget.name {
 			if m.err != nil {
@@ -294,7 +300,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case configLoadedMsg:
 		// Ignore stale fetches if the user moved to another object before this
 		// response arrived.
-		if a.screen == screenConfig &&
+		if m.client == a.client && m.seq == a.loadSeq && a.screen == screenConfig &&
 			m.res.Key() == a.configTarget.res.Key() &&
 			m.ns == a.configTarget.ns && m.name == a.configTarget.name {
 			if m.err != nil {
@@ -909,7 +915,8 @@ func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (a App) reload() (tea.Model, tea.Cmd) {
 	a.loading = true
-	return a, tea.Batch(loadResourceCmd(a.client, a.res, a.namespace), a.spin.Tick)
+	a.loadSeq++
+	return a, tea.Batch(loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace), a.spin.Tick)
 }
 
 func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {
@@ -932,7 +939,8 @@ func (a App) switchToCockpit() (tea.Model, tea.Cmd) {
 
 func (a App) reloadCockpit() (tea.Model, tea.Cmd) {
 	a.loading = true
-	return a, tea.Batch(loadCockpitCmd(a.client), a.spin.Tick)
+	a.loadSeq++
+	return a, tea.Batch(loadCockpitCmd(a.client, a.loadSeq), a.spin.Tick)
 }
 
 func (a App) openNavEntry(e navEntry) (tea.Model, tea.Cmd) {
@@ -957,7 +965,8 @@ func (a App) openDetailTarget(t target) (tea.Model, tea.Cmd) {
 	a.detailTarget = t
 	a.screen = screenDetail
 	a.detail.setMessage(t.name, "loading…")
-	return a, loadDetailCmd(a.client, t.res, t.ns, t.name)
+	a.loadSeq++
+	return a, loadDetailCmd(a.client, a.loadSeq, t.res, t.ns, t.name)
 }
 
 func (a App) openConfig() (tea.Model, tea.Cmd) {
@@ -975,7 +984,8 @@ func (a App) openConfigTarget(t target) (tea.Model, tea.Cmd) {
 	a.configTarget = t
 	a.screen = screenConfig
 	a.config.setMessage(t.name, "loading…")
-	return a, loadConfigCmd(a.client, t.res, t.ns, t.name)
+	a.loadSeq++
+	return a, loadConfigCmd(a.client, a.loadSeq, t.res, t.ns, t.name)
 }
 
 func (a App) openLogs() (tea.Model, tea.Cmd) {

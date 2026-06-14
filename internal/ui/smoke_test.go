@@ -83,14 +83,15 @@ func TestAppSmoke(t *testing.T) {
 			m, _ = m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 
 			// Cockpit is the default screen; render it populated.
-			m, _ = m.Update(cockpitLoadedMsg{overview: fakeOverview()})
+			a := m.(App)
+			m, _ = m.Update(cockpitLoadedMsg{client: a.client, seq: a.loadSeq, overview: fakeOverview()})
 			mustRender(t, m, themeName, size)
 
 			// Switch to the table and load synthetic data for the rest.
-			a := m.(App)
+			a = m.(App)
 			a.screen = screenTable
 			m = a
-			m, _ = m.Update(resourcesLoadedMsg{res: a.res, ns: a.namespace, tbl: fakeTable()})
+			m, _ = m.Update(resourcesLoadedMsg{client: a.client, seq: a.loadSeq, res: a.res, ns: a.namespace, tbl: fakeTable()})
 			mustRender(t, m, themeName, size)
 
 			// Walk through key-driven states.
@@ -178,6 +179,41 @@ func TestSpreadTruncatesLongLeftSide(t *testing.T) {
 	}
 	if !strings.Contains(out, right) {
 		t.Fatalf("spread dropped right side %q: %q", right, out)
+	}
+}
+
+func TestIgnoresStaleLoadResults(t *testing.T) {
+	current := &k8s.Client{}
+	stale := &k8s.Client{}
+	res := k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+
+	tests := []struct {
+		name string
+		msg  tea.Msg
+	}{
+		{
+			name: "stale client",
+			msg:  resourcesLoadedMsg{client: stale, seq: 2, res: res, tbl: fakeTable()},
+		},
+		{
+			name: "stale sequence",
+			msg:  resourcesLoadedMsg{client: current, seq: 1, res: res, tbl: fakeTable()},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := App{client: current, res: res, screen: screenTable, loadSeq: 2, loading: true}
+			app.table = newTableView(PickTheme("ansi"))
+
+			model, _ := app.Update(tt.msg)
+			got := model.(App)
+			if !got.loading {
+				t.Fatal("stale load cleared loading state")
+			}
+			if got.table.count() != 0 {
+				t.Fatalf("stale load populated %d rows", got.table.count())
+			}
+		})
 	}
 }
 
