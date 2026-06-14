@@ -35,6 +35,7 @@ type keyMap struct {
 	Palette   key.Binding
 	Namespace key.Binding
 	Context   key.Binding
+	Command   key.Binding
 	AllNS     key.Binding
 	Wide      key.Binding
 
@@ -76,6 +77,7 @@ func defaultKeys() keyMap {
 		Palette:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "command palette")),
 		Namespace: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "namespace")),
 		Context:   key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "context")),
+		Command:   key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "kubectl command")),
 		AllNS:     key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "all namespaces")),
 		Wide:      key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "wide columns")),
 
@@ -97,7 +99,7 @@ func (k keyMap) groups() []helpGroup {
 	return []helpGroup{
 		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom}},
 		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete}},
-		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide}},
+		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
 		{"Logs", []key.Binding{k.Follow}},
 		{"General", []key.Binding{k.Help, k.Back, k.Quit}},

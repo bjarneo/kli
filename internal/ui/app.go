@@ -37,6 +37,7 @@ const (
 	overlayHelp
 	overlayConfirm
 	overlayTerm
+	overlayCommand
 )
 
 type focusKind int
@@ -88,6 +89,7 @@ type App struct {
 	help    helpView
 	confirm confirmView
 	term    termView
+	command commandView
 
 	termSession int
 
@@ -122,6 +124,7 @@ func NewApp(cl *k8s.Client, th Theme) App {
 	a.sel = newSelector(th)
 	a.help = newHelpView(th, a.keys)
 	a.term = newTermView(th)
+	a.command = newCommandView(th)
 
 	sp := spinner.New()
 	sp.Spinner = spinner.MiniDot
@@ -417,6 +420,15 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case overlayConfirm:
 		return a.updateConfirm(msg)
+	case overlayCommand:
+		if key.Matches(msg, a.keys.Back) || key.Matches(msg, a.keys.Command) || msg.String() == "q" {
+			a.overlay = overlayNone
+		}
+		return a, nil
+	}
+
+	if !(a.screen == screenTable && a.table.filtering) && key.Matches(msg, a.keys.Command) {
+		return a.openCommand()
 	}
 
 	switch a.screen {
@@ -1174,6 +1186,12 @@ func (a App) confirmAction(title, message string, danger bool, action tea.Cmd) (
 	return a, nil
 }
 
+func (a App) openCommand() (tea.Model, tea.Cmd) {
+	a.command.setCommand(a.kubectlCommand())
+	a.overlay = overlayCommand
+	return a, nil
+}
+
 func (a App) toggleAllNS() (tea.Model, tea.Cmd) {
 	if a.namespace == "" {
 		a.namespace = a.lastNS
@@ -1254,6 +1272,7 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 	items = append(items,
 		selItem{title: "Jump to resource", desc: ":", id: "cmd:jump"},
 		selItem{title: "Filter list", desc: "/", id: "cmd:filter"},
+		selItem{title: "Show kubectl command", desc: "C", id: "cmd:kubectl"},
 		selItem{title: "Refresh", desc: "r", id: "cmd:refresh"},
 		selItem{title: "Switch namespace", desc: "n", id: "cmd:namespace"},
 		selItem{title: "All namespaces", desc: "a", id: "cmd:allns"},
@@ -1379,6 +1398,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		a.focus = focusMain
 		a.table.startFilter()
 		return a, nil
+	case "cmd:kubectl":
+		return a.openCommand()
 	case "cmd:refresh":
 		if a.screen == screenCockpit {
 			return a.reloadCockpit()
@@ -1421,6 +1442,8 @@ func (a App) View() string {
 		body = a.sel.View(a.width, a.bodyH())
 	case overlayConfirm:
 		body = a.confirm.View(a.width, a.bodyH())
+	case overlayCommand:
+		body = a.command.View(a.width, a.bodyH())
 	default:
 		switch a.screen {
 		case screenConfig:
@@ -1609,6 +1632,8 @@ func (a App) hints() []hint {
 		return []hint{{"esc", "close"}}
 	case overlayConfirm:
 		return []hint{{"y", "confirm"}, {"n", "cancel"}}
+	case overlayCommand:
+		return []hint{{"esc", "close"}, {"C", "close"}}
 	}
 	switch a.screen {
 	case screenConfig:
@@ -1616,23 +1641,23 @@ func (a App) hints() []hint {
 		if a.configTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"esc", "back"})
+		return append(h, hint{"e", "edit"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenDetail:
 		h := []hint{{"↑↓", "scroll"}, {"enter", "config"}}
 		if a.detailTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"esc", "back"})
+		return append(h, hint{"e", "edit"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"C", "cmd"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
-			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"?", "help"}}
+			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
 		}
-		return []hint{{"tab", "nav"}, {":", "jump"}, {"^k", "palette"}, {"r", "refresh"}, {"n", "ns"}, {"c", "ctx"}, {"?", "help"}, {"q", "quit"}}
+		return []hint{{"tab", "nav"}, {":", "jump"}, {"^k", "palette"}, {"C", "cmd"}, {"r", "refresh"}, {"n", "ns"}, {"c", "ctx"}, {"?", "help"}, {"q", "quit"}}
 	}
 	if a.focus == focusSidebar {
-		return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"?", "help"}}
+		return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
 	}
 
 	// Context-aware: surface the actions that apply to the current resource.
@@ -1652,7 +1677,7 @@ func (a App) hints() []hint {
 		h = append(h, hint{"t", "trigger"})
 	}
 	h = append(h,
-		hint{"e", "edit"}, hint{"x", "del"}, hint{"/", "filter"}, hint{"S", "sort"},
+		hint{"e", "edit"}, hint{"x", "del"}, hint{"/", "filter"}, hint{"S", "sort"}, hint{"C", "cmd"},
 		hint{"tab", "nav"}, hint{"^k", "palette"}, hint{"?", "help"}, hint{"q", "quit"})
 	if a.table.filterActive() {
 		h = append([]hint{{"esc", "clear filter"}}, h...)
