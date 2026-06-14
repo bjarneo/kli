@@ -1817,8 +1817,13 @@ func (a App) cockpitScreen() string {
 	}
 	// The cockpit's own panels already have borders, so render them directly
 	// beside the nav rather than inside another bordered pane.
-	mainW := a.width - a.sidebarWidth()
-	return lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), a.cockpit.View(mainW, a.bodyH()))
+	mainW := a.width - a.sidebarWidth() - cockpitPanelGap
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		a.renderSidebar(),
+		strings.Repeat(" ", cockpitPanelGap),
+		a.cockpit.View(mainW, a.bodyH()),
+	)
 }
 
 func (a App) headerView() string {

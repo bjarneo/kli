@@ -29,17 +29,16 @@ type Palette struct {
 }
 
 // ansiPalette uses the terminal's own 16-color ANSI palette so kli looks
-// consistent with whatever color scheme the user already runs. The bright
-// variants (8-15) read well on dark backgrounds and the normal variants (0-7)
-// on light ones, so we pick by the detected background and defer the actual
-// hues to the terminal's scheme.
+// consistent with whatever color scheme the user already runs. The accent and
+// status colors use the bright variants (8-15) on dark backgrounds; muted text
+// avoids bright black because many dark themes render it too low-contrast.
 func ansiPalette(dark bool) Palette {
 	if dark {
 		return Palette{
 			Accent:     lipgloss.Color("12"), // bright blue
 			Accent2:    lipgloss.Color("13"), // bright magenta
 			Fg:         lipgloss.NoColor{},   // terminal default
-			Muted:      lipgloss.Color("8"),  // gray
+			Muted:      lipgloss.Color("7"),  // readable gray on dark backgrounds
 			Border:     lipgloss.Color("8"),
 			Good:       lipgloss.Color("10"), // bright green
 			Warn:       lipgloss.Color("11"), // bright yellow
@@ -75,7 +74,7 @@ func tokyoNightPalette() Palette {
 		Accent:     lipgloss.Color("#7aa2f7"), // blue
 		Accent2:    lipgloss.Color("#bb9af7"), // magenta
 		Fg:         lipgloss.Color("#c0caf5"),
-		Muted:      lipgloss.Color("#565f89"),
+		Muted:      lipgloss.Color("#7f849c"),
 		Border:     lipgloss.Color("#3b4261"),
 		Good:       lipgloss.Color("#9ece6a"), // green
 		Warn:       lipgloss.Color("#e0af68"), // yellow

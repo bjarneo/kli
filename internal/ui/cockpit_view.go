@@ -10,6 +10,8 @@ import (
 	"github.com/bjarneo/kli/internal/k8s"
 )
 
+const cockpitPanelGap = 1
+
 // cockpitView renders the cluster overview dashboard shown on launch.
 type cockpitView struct {
 	th    Theme
@@ -96,13 +98,13 @@ func (c cockpitView) View(width, height int) string {
 		topH = lipgloss.Height(top)
 	}
 
-	warnH := height - topH
+	warnH := height - topH - cockpitPanelGap
 	if warnH < 3 {
 		warnH = 3
 	}
 	warnings := c.panel("Recent warnings", c.warningLines(paneContentWidth(width)), width, warnH)
 
-	return clampBlock(lipgloss.JoinVertical(lipgloss.Left, top, warnings), width, height)
+	return clampBlock(lipgloss.JoinVertical(lipgloss.Left, top, "", warnings), width, height)
 }
 
 func (c cockpitView) warningLines(w int) []string {
