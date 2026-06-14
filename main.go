@@ -27,6 +27,14 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "config" {
+		if err := runConfig(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	var (
 		ctxFlag, nsFlag, resFlag, themeFlag, kubeconfigFlag string
 		checkFlag, versionFlag                              bool
@@ -91,4 +99,36 @@ func check(ctxName, kubeconfig, ns, resQuery string) error {
 	}
 	fmt.Printf("listed %s: %d columns, %d rows\n", ri.Key(), len(tbl.Columns), len(tbl.Rows))
 	return nil
+}
+
+// runConfig handles the `kli config <subcommand>` family.
+func runConfig(args []string) error {
+	sub := ""
+	if len(args) > 0 {
+		sub = args[0]
+	}
+	switch sub {
+	case "init":
+		force := false
+		for _, a := range args[1:] {
+			if a == "--force" || a == "-f" {
+				force = true
+			}
+		}
+		path, err := ui.WriteDefaultConfig(force)
+		if err != nil {
+			return err
+		}
+		fmt.Println("wrote", path)
+		return nil
+	case "path":
+		path, err := ui.ConfigPath()
+		if err != nil {
+			return err
+		}
+		fmt.Println(path)
+		return nil
+	default:
+		return fmt.Errorf("usage: kli config <init [--force] | path>")
+	}
 }

@@ -65,6 +65,7 @@ type App struct {
 	client *k8s.Client
 	theme  Theme
 	keys   keyMap
+	navCat []navCatGroup // sidebar catalog (from config or built-in defaults)
 
 	width, height int // usable area, inside the outer gutter
 	gutter        int // equal padding (cells) on every side
@@ -109,13 +110,14 @@ type App struct {
 }
 
 // NewApp builds the root model for a connected client.
-func NewApp(cl *k8s.Client, th Theme) App {
+func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
 	a := App{
 		client: cl,
 		theme:  th,
 		keys:   defaultKeys(),
+		navCat: navCat,
 	}
-	a.sidebar = newSidebar(th, cl.Registry())
+	a.sidebar = newSidebar(th, cl.Registry(), navCat)
 	a.cockpit = newCockpitView(th)
 	a.table = newTableView(th)
 	a.config = newConfigView(th)
@@ -1209,7 +1211,7 @@ func (a App) adoptClient(cl *k8s.Client) (tea.Model, tea.Cmd) {
 	a.client = cl
 	// Rebuild the left nav from the new cluster's catalog: available resource
 	// kinds differ between clusters, so the previous sidebar may be stale.
-	a.sidebar = newSidebar(a.theme, cl.Registry())
+	a.sidebar = newSidebar(a.theme, cl.Registry(), a.navCat)
 	a.namespace = cl.Namespace
 	a.lastNS = cl.Namespace
 	if a.lastNS == "" {

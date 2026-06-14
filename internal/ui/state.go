@@ -14,11 +14,11 @@ type savedState struct {
 }
 
 func stateFile() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := kliConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "kli", "state.json"), nil
+	return filepath.Join(dir, "state.json"), nil
 }
 
 func loadState() (savedState, bool) {

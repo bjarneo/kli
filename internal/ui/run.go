@@ -35,7 +35,20 @@ func Run(opts Options) error {
 		return err
 	}
 
-	app := NewApp(cl, th)
+	// Resolve the sidebar catalog: a user config file replaces the built-in
+	// defaults; a malformed config is ignored (defaults kept) with a warning.
+	catalog := defaultNavCatalog()
+	cfg, found, cfgErr := loadConfig()
+	if found {
+		if c := cfg.sidebarCatalog(); len(c) > 0 {
+			catalog = c
+		}
+	}
+
+	app := NewApp(cl, th, catalog)
+	if cfgErr != nil {
+		app.setStatus("config: "+cfgErr.Error()+"; using defaults", true)
+	}
 	switch {
 	case opts.Namespace != "":
 		app.namespace = opts.Namespace
