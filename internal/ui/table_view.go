@@ -51,13 +51,7 @@ type tableView struct {
 }
 
 func newTableView(th Theme) tableView {
-	fi := textinput.New()
-	fi.Prompt = "/"
-	fi.Placeholder = "filter"
-	styles := fi.Styles()
-	styles.Cursor.Blink = false
-	fi.SetStyles(styles)
-	return tableView{th: th, filter: fi, sortCol: -1}
+	return tableView{th: th, filter: newFilterInput("filter"), sortCol: -1}
 }
 
 func (v *tableView) setSize(w, h int) {

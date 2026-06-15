@@ -4,11 +4,24 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// newFilterInput builds the "/"-prompted text input shared by the table and
+// logs filters: same prompt and styling, only the placeholder differs.
+func newFilterInput(placeholder string) textinput.Model {
+	fi := textinput.New()
+	fi.Prompt = "/"
+	fi.Placeholder = placeholder
+	styles := fi.Styles()
+	styles.Cursor.Blink = false
+	fi.SetStyles(styles)
+	return fi
+}
 
 // truncate shortens s to at most w display columns, adding an ellipsis when
 // cut. It is display-width and ANSI aware (the same engine used everywhere else

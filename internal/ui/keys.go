@@ -107,7 +107,7 @@ func (k keyMap) groups() []helpGroup {
 		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Docs}},
 		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
-		{"Logs", []key.Binding{k.Follow}},
+		{"Logs", []key.Binding{k.Follow, k.Filter}},
 		{"General", []key.Binding{k.Help, k.Back, k.Quit}},
 	}
 }

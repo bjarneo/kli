@@ -571,7 +571,19 @@ func (a App) routeAux(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.table, cmd = a.table.Update(msg)
 		return a, cmd
 	}
+	if a.screen == screenLogs && a.logs.filtering {
+		var cmd tea.Cmd
+		a.logs, cmd = a.logs.Update(msg)
+		return a, cmd
+	}
 	return a, nil
+}
+
+// filterInput reports whether a text filter is capturing keystrokes, so global
+// single-key actions (command, docs) don't fire while the user is typing.
+func (a App) filterInput() bool {
+	return (a.screen == screenTable && a.table.filtering) ||
+		(a.screen == screenLogs && a.logs.filtering)
 }
 
 // --- key routing ------------------------------------------------------------
@@ -606,10 +618,10 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	if !(a.screen == screenTable && a.table.filtering) && key.Matches(msg, a.keys.Command) {
+	if !a.filterInput() && key.Matches(msg, a.keys.Command) {
 		return a.openCommand()
 	}
-	if !(a.screen == screenTable && a.table.filtering) && key.Matches(msg, a.keys.Docs) {
+	if !a.filterInput() && key.Matches(msg, a.keys.Docs) {
 		return a.openDocs()
 	}
 
@@ -855,11 +867,34 @@ func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Filtering captures all typing until it ends.
+	if a.logs.filtering {
+		switch {
+		case key.Matches(msg, a.keys.Back):
+			a.logs.stopFilter(true)
+			return a, nil
+		case msg.String() == "enter":
+			a.logs.stopFilter(false)
+			return a, nil
+		default:
+			var cmd tea.Cmd
+			a.logs, cmd = a.logs.Update(msg)
+			return a, cmd
+		}
+	}
 	switch {
 	case key.Matches(msg, a.keys.Back) || msg.String() == "q":
+		// esc clears an applied filter first; otherwise it leaves the logs.
+		if key.Matches(msg, a.keys.Back) && a.logs.filterActive() {
+			a.logs.stopFilter(true)
+			return a, nil
+		}
 		a.logs.stop()
 		a.logSession++
 		a.screen = screenTable
+		return a, nil
+	case key.Matches(msg, a.keys.Filter):
+		a.logs.startFilter()
 		return a, nil
 	case key.Matches(msg, a.keys.Follow):
 		a.logs.follow = !a.logs.follow
@@ -1973,7 +2008,7 @@ func (a App) hints() []hint {
 		}
 		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"O", "docs"}, {"C", "cmd"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"O", "docs"}, {"C", "cmd"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
 			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}

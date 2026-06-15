@@ -55,7 +55,7 @@ show a node shell, workloads show scale and restart, and CronJobs show trigger.
 
 | Context | Keys |
 | --- | --- |
-| Logs | `f` follow, `g` / `G` top / bottom, `esc` back |
+| Logs | `f` follow, `/` filter (regex), `g` / `G` top / bottom, `esc` back |
 | Config summary | scroll, `d` / `y` YAML, `e` edit, `t` trigger CronJob, `esc` back |
 | Detail (YAML) | scroll, `Enter` config, `e` edit, `t` trigger CronJob, `esc` back |
 | Shell / editor | keys go to the program; `Ctrl+\` detaches (cancels an edit) |
