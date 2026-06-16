@@ -67,6 +67,12 @@ func (v *tableView) setSize(w, h int) {
 }
 
 func (v *tableView) setData(t *k8s.Table) {
+	// Remember the selected row so a live refresh that reorders or resizes the
+	// list keeps the same object highlighted instead of jumping by index.
+	prev := ""
+	if r, ok := v.selected(); ok {
+		prev = r.Name
+	}
 	if t == nil {
 		v.cols = nil
 		v.allRows = nil
@@ -75,6 +81,19 @@ func (v *tableView) setData(t *k8s.Table) {
 		v.allRows = t.Rows
 	}
 	v.rebuild()
+	if prev != "" {
+		v.selectByName(prev)
+	}
+}
+
+// selectByName moves the cursor to the row with the given name, if present.
+func (v *tableView) selectByName(name string) {
+	for i, r := range v.rows {
+		if r.Name == name {
+			v.setCursor(i)
+			return
+		}
+	}
 }
 
 func (v *tableView) toggleWide() {

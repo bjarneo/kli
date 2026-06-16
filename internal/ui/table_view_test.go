@@ -7,6 +7,39 @@ import (
 	"github.com/bjarneo/kli/internal/k8s"
 )
 
+func TestTableSelectionFollowsRowAcrossRefresh(t *testing.T) {
+	v := newTableView(PickTheme("ansi"))
+	v.setData(scrollTable())
+	v.setSize(400, 20)
+	v.setCursor(1)
+	if r, _ := v.selected(); r.Name != "beta" {
+		t.Fatalf("setup: expected beta selected, got %q", r.Name)
+	}
+
+	// A live refresh delivers the same rows reordered; the selection should
+	// follow beta rather than stay on index 1.
+	base := scrollTable()
+	reordered := &k8s.Table{Columns: base.Columns, Rows: []k8s.Row{base.Rows[1], base.Rows[0]}}
+	v.setData(reordered)
+	if r, ok := v.selected(); !ok || r.Name != "beta" {
+		t.Fatalf("selection should follow beta after refresh, got %q", r.Name)
+	}
+}
+
+func TestTableSwitchResetsSelectionToTop(t *testing.T) {
+	v := newTableView(PickTheme("ansi"))
+	v.setData(scrollTable())
+	v.setSize(400, 20)
+	v.setCursor(1)
+
+	// A resource switch clears the data first; selection should land at the top.
+	v.setData(nil)
+	v.setData(scrollTable())
+	if r, _ := v.selected(); r.Name != "alpha" {
+		t.Fatalf("switch should reset selection to the top, got %q", r.Name)
+	}
+}
+
 func scrollTable() *k8s.Table {
 	return &k8s.Table{
 		Columns: []k8s.Column{
