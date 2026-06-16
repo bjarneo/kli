@@ -66,6 +66,13 @@ func TestAdoptStartupTransitionsToCockpit(t *testing.T) {
 	}
 }
 
+func TestGoodbyeMentionsAppAndCredit(t *testing.T) {
+	plain := ansi.Strip(goodbye(PickTheme("ansi")))
+	if !strings.Contains(plain, "kli") || !strings.Contains(plain, creatorHandle) {
+		t.Fatalf("goodbye should mention kli and the credit, got %q", plain)
+	}
+}
+
 func TestAdoptStartupErrorQuits(t *testing.T) {
 	a := newSplashApp()
 	m, cmd := a.adoptStartup(startupReadyMsg{err: errors.New("connect failed")})

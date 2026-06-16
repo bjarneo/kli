@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -31,5 +33,12 @@ func Run(opts Options) error {
 	if fin, ok := m.(App); ok && fin.startErr != nil {
 		return fin.startErr
 	}
+	// A clean farewell on the normal screen once the alt-screen is torn down.
+	fmt.Printf("\n  %s\n\n", goodbye(th))
 	return nil
+}
+
+// goodbye is the farewell line printed after a clean quit.
+func goodbye(th Theme) string {
+	return th.HeaderVal.Render("kli") + th.Dim.Render(" · see you next time · "+creatorHandle)
 }
