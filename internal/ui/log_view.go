@@ -47,10 +47,12 @@ type logView struct {
 	matched   int // lines currently shown
 	height    int // pane content height, retained so chrome changes can relayout
 
-	// Visual line selection: v marks a range to copy. While selecting, the view
-	// is frozen on a snapshot (selLines) and wrap is forced off so a line maps
-	// 1:1 to a row.
+	// Visual line selection: v enters selection mode with a movable cursor; m
+	// drops the anchor (marking) and further movement extends the range to copy.
+	// While selecting, the view is frozen on a snapshot (selLines) and wrap is
+	// forced off so a line maps 1:1 to a row.
 	selecting     bool
+	marking       bool
 	selAnchor     int
 	selCursor     int
 	selLines      []string
@@ -154,15 +156,25 @@ func (l *logView) startSelect() {
 	l.wrapBeforeSel = l.vp.SoftWrap
 	l.vp.SoftWrap = false
 	l.selecting = true
+	l.marking = false
 	l.follow = false
 	l.selAnchor = clamp(top, 0, len(l.selLines)-1)
 	l.selCursor = l.selAnchor
 	l.renderSelection()
 }
 
+// mark drops the selection anchor at the cursor; further movement extends the
+// marked range from here.
+func (l *logView) mark() {
+	l.marking = true
+	l.selAnchor = l.selCursor
+	l.renderSelection()
+}
+
 // stopSelect leaves selection and restores the live, wrap-respecting view.
 func (l *logView) stopSelect() {
 	l.selecting = false
+	l.marking = false
 	l.selLines = nil
 	l.vp.SoftWrap = l.wrapBeforeSel
 	l.syncViewport()
@@ -174,8 +186,12 @@ func (l *logView) setSelCursor(i int) {
 	l.renderSelection()
 }
 
-// selRange is the inclusive [lo, hi] line range currently marked.
+// selRange is the inclusive [lo, hi] line range to copy: just the cursor line
+// until the anchor is marked, then the span between anchor and cursor.
 func (l *logView) selRange() (int, int) {
+	if !l.marking {
+		return l.selCursor, l.selCursor
+	}
 	if l.selAnchor <= l.selCursor {
 		return l.selAnchor, l.selCursor
 	}
@@ -321,7 +337,11 @@ func (l logView) View() string {
 	}
 	right := l.th.Dim.Render(mode) + "  " + style.Render("● "+state)
 	if l.selecting {
-		right = l.th.HeaderVal.Render(fmt.Sprintf("● select %d", l.selCount()))
+		if l.marking {
+			right = l.th.HeaderVal.Render(fmt.Sprintf("● mark %d", l.selCount()))
+		} else {
+			right = l.th.HeaderVal.Render("● select")
+		}
 	}
 	title := l.th.ModalTitle.Render(l.title)
 	header := spread(title, right, l.vp.Width())

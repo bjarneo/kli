@@ -896,6 +896,8 @@ func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, a.keys.Back):
 			a.logs.stopSelect()
+		case key.Matches(msg, a.keys.Mark):
+			a.logs.mark()
 		case key.Matches(msg, a.keys.Copy) || msg.String() == "enter":
 			text, n := a.logs.copySelection(), a.logs.selCount()
 			a.logs.stopSelect()
@@ -2135,8 +2137,11 @@ func (a App) hints() []hint {
 		}
 		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
-		if a.logs.selecting {
+		switch {
+		case a.logs.selecting && a.logs.marking:
 			return []hint{{"↑↓", "extend"}, {"y", "copy"}, {"esc", "cancel"}}
+		case a.logs.selecting:
+			return []hint{{"↑↓", "move"}, {"m", "mark"}, {"y", "copy"}, {"esc", "cancel"}}
 		}
 		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"O", "docs"}, {"esc", "back"}}
 	case screenCockpit:

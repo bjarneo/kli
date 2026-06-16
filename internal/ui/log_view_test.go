@@ -111,7 +111,8 @@ func TestLogSelectionCopiesMarkedRange(t *testing.T) {
 	if !l.selecting {
 		t.Fatal("startSelect should enter selection mode")
 	}
-	l.selAnchor = 1
+	l.setSelCursor(1)
+	l.mark() // anchor at line 1
 	l.setSelCursor(3)
 
 	if got, want := l.copySelection(), "line-1\nline-2\nline-3"; got != want {
@@ -119,6 +120,24 @@ func TestLogSelectionCopiesMarkedRange(t *testing.T) {
 	}
 	if l.selCount() != 3 {
 		t.Fatalf("selCount = %d, want 3", l.selCount())
+	}
+}
+
+func TestLogSelectionWithoutMarkCopiesCursorLine(t *testing.T) {
+	l := newTestLogView()
+	for i := 0; i < 5; i++ {
+		l.appendLine("line-" + itoa(i))
+	}
+	l.startSelect()
+	l.setSelCursor(2) // moving without marking does not extend a range
+	if l.marking {
+		t.Fatal("entering selection should not start marking")
+	}
+	if got := l.copySelection(); got != "line-2" {
+		t.Fatalf("copySelection = %q, want %q", got, "line-2")
+	}
+	if l.selCount() != 1 {
+		t.Fatalf("selCount = %d, want 1", l.selCount())
 	}
 }
 
@@ -146,6 +165,34 @@ func TestLogSelectionFlowCopiesAndExits(t *testing.T) {
 	}
 	if !strings.Contains(a.status, "copied") {
 		t.Fatalf("expected a copy status, got %q", a.status)
+	}
+}
+
+func TestLogSelectionMarkThenExtend(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys(), screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 10)
+	for i := 0; i < 5; i++ {
+		app.logs.appendLine("l" + itoa(i))
+	}
+
+	m, _ := app.updateLogs(mkKey("v"))
+	a := m.(App)
+	if a.logs.marking {
+		t.Fatal("v should not start marking")
+	}
+	m, _ = a.updateLogs(mkKey("m"))
+	a = m.(App)
+	if !a.logs.marking {
+		t.Fatal("m should start marking")
+	}
+	m, cmd := a.updateLogs(mkKey("y"))
+	a = m.(App)
+	if a.logs.selecting {
+		t.Fatal("y should end selection")
+	}
+	if cmd == nil || !strings.Contains(a.status, "copied") {
+		t.Fatalf("y should copy: cmd=%v status=%q", cmd != nil, a.status)
 	}
 }
 

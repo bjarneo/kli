@@ -56,7 +56,7 @@ show a node shell, workloads show scale and restart, and CronJobs show trigger.
 | Context | Keys |
 | --- | --- |
 | Logs | `f` follow, `/` filter (regex), `w` (or `Ctrl+w` while filtering) wrap / truncate lines, `v` select lines, `g` / `G` top / bottom, `esc` back |
-| Logs (selecting) | `↑` / `↓` (and `g` / `G`, page keys) extend, `y` / `Enter` copy, `esc` cancel |
+| Logs (selecting) | `↑` / `↓` (and `g` / `G`, page keys) move the cursor, `m` mark, `y` / `Enter` copy, `esc` cancel |
 | Config summary | scroll, `d` / `y` YAML, `e` edit, `t` trigger CronJob, `esc` back |
 | Detail (YAML) | scroll, `Enter` config, `e` edit, `t` trigger CronJob, `esc` back |
 | Shell / editor | keys go to the program; `Ctrl+\` detaches (cancels an edit) |
@@ -68,10 +68,11 @@ show a node shell, workloads show scale and restart, and CronJobs show trigger.
 
 Two ways to mark and copy log lines:
 
-- Keyboard: press `v` to start a selection at the top visible line, extend it
-  with `↑` / `↓` (or `g` / `G` and the page keys), then `y` or `Enter` to copy
-  the marked lines to the clipboard (via OSC 52, so it works over SSH too).
-  `esc` cancels.
+- Keyboard: press `v` to enter selection mode, move the cursor with `↑` / `↓`
+  (or `g` / `G` and the page keys), press `m` to mark the start, then move to
+  extend the range and `y` or `Enter` to copy it to the clipboard (via OSC 52,
+  so it works over SSH too). Without marking, `y` copies the cursor line. `esc`
+  cancels.
 - Mouse: the logs view releases the mouse, so your terminal's own click-and-drag
   selection and copy work directly. (Keyboard scrolling still applies; the mouse
   wheel does not scroll here.)
