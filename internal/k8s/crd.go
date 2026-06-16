@@ -48,7 +48,7 @@ func (reg *Registry) crdResource(obj map[string]any) (ResourceInfo, bool) {
 	if group == "" || plural == "" {
 		return ResourceInfo{}, false
 	}
-	if ri, ok := reg.Resolve(plural + "." + group); ok {
+	if ri, ok := reg.Resolve(resourceKey(plural, group)); ok {
 		return ri, true
 	}
 	version := crdServedVersion(obj)

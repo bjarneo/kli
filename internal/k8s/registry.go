@@ -27,10 +27,16 @@ func (r ResourceInfo) GVR() schema.GroupVersionResource {
 // Key is the canonical lookup key (the plural resource name, group-qualified
 // when not in the core group) used to identify a resource unambiguously.
 func (r ResourceInfo) Key() string {
-	if r.Group == "" {
-		return r.Resource
+	return resourceKey(r.Resource, r.Group)
+}
+
+// resourceKey formats the canonical lookup key: the plural resource name,
+// group-qualified when not in the core group.
+func resourceKey(resource, group string) string {
+	if group == "" {
+		return resource
 	}
-	return r.Resource + "." + r.Group
+	return resource + "." + group
 }
 
 // Title is a short human label for the resource shown in the header.
