@@ -406,19 +406,25 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.session != a.logSession || a.screen != screenLogs {
 			return a, nil
 		}
-		if m.err != nil {
-			a.setStatus("logs: "+trimErr(m.err), true)
-			return a, waitForLog(a.logs.ch)
-		}
-		if m.done {
-			if a.logs.streams <= 1 {
-				a.logs.streams = 0
-				return a, nil
+		// Apply this event plus any others already buffered, so a burst (notably
+		// the initial tail) costs one viewport sync and render instead of one per
+		// line.
+		a.applyLogEvent(m)
+	drain:
+		for n := 0; n < logBatchMax; n++ {
+			select {
+			case ev := <-a.logs.ch:
+				if ev.session == a.logSession {
+					a.applyLogEvent(ev)
+				}
+			default:
+				break drain
 			}
-			a.logs.streams--
-			return a, waitForLog(a.logs.ch)
 		}
-		a.logs.appendLine(m.line)
+		a.logs.syncViewport()
+		if a.logs.streams <= 0 {
+			return a, nil // every stream ended; stop waiting
+		}
 		return a, waitForLog(a.logs.ch)
 
 	case deploymentLogsMsg:
@@ -1252,6 +1258,20 @@ func (a App) handleDeploymentLogs(m deploymentLogsMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	return a.startDeploymentLogs(m.ns, m.name, m.targets)
+}
+
+// applyLogEvent folds one stream event into the log view without syncing the
+// viewport, so a batch of events can sync once. A line is stored, a stream error
+// is surfaced, and a done event retires one stream.
+func (a *App) applyLogEvent(ev logEvent) {
+	switch {
+	case ev.err != nil:
+		a.setStatus("logs: "+trimErr(ev.err), true)
+	case ev.done:
+		a.logs.streams--
+	default:
+		a.logs.storeLine(ev.line)
+	}
 }
 
 func (a App) startLogs(ns, pod, container string) (tea.Model, tea.Cmd) {

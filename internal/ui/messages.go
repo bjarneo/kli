@@ -15,7 +15,8 @@ import (
 const (
 	opTimeout       = 15 * time.Second
 	refreshInterval = 2 * time.Second
-	logTailLines    = 1000
+	logTailLines    = 1000 // initial server-side tail, so we never fetch the whole log
+	logBatchMax     = 2048 // lines drained per update, so a burst renders at once
 )
 
 // --- messages ---------------------------------------------------------------

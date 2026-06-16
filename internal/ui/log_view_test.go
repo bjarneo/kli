@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	"github.com/bjarneo/kli/internal/k8s"
 )
 
 func newTestLogView() logView {
@@ -75,6 +77,28 @@ func TestLogFilterInvalidRegexIsForgiving(t *testing.T) {
 	}
 	if l.matched != 3 {
 		t.Fatalf("invalid pattern should keep showing all lines, got %d", l.matched)
+	}
+}
+
+func TestLogEventDrainsBufferedLinesInOneUpdate(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), width: 80, height: 24, screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 20)
+	app.logSession, app.logs.session, app.logs.streams = 7, 7, 1
+	ch := make(chan logEvent, 16)
+	app.logs.ch = ch
+	for i := 0; i < 5; i++ {
+		ch <- logEvent{session: 7, line: "buffered " + itoa(i)}
+	}
+
+	// One delivered event should pull the 5 already buffered in the same update.
+	m, cmd := app.Update(logEvent{session: 7, line: "first"})
+	na := m.(App)
+	if len(na.logs.lines) != 6 {
+		t.Fatalf("expected 6 lines after draining the buffer, got %d", len(na.logs.lines))
+	}
+	if cmd == nil {
+		t.Fatal("expected to keep waiting while a stream is live")
 	}
 }
 

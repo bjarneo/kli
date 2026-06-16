@@ -93,6 +93,13 @@ func (l *logView) stickToBottom() {
 }
 
 func (l *logView) appendLine(s string) {
+	l.storeLine(s)
+	l.syncViewport()
+}
+
+// storeLine adds a line to the buffer and the filtered content without touching
+// the viewport, so a burst of lines can be stored and then synced once.
+func (l *logView) storeLine(s string) {
 	s = expandTabs(s) // tabs measure as zero width and would spill past the pane
 	l.lines = append(l.lines, s)
 	switch {
@@ -109,7 +116,6 @@ func (l *logView) appendLine(s string) {
 			l.content += "\n" + s
 		}
 	}
-	l.syncViewport()
 }
 
 // syncViewport pushes the current content into the viewport, sticking to the
