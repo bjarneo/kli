@@ -68,10 +68,13 @@ func (v *tableView) setSize(w, h int) {
 
 func (v *tableView) setData(t *k8s.Table) {
 	// Remember the selected row so a live refresh that reorders or resizes the
-	// list keeps the same object highlighted instead of jumping by index.
-	prev := ""
+	// list keeps the same object highlighted instead of jumping by index. The
+	// namespace is part of the identity: in all-namespaces mode a name can
+	// repeat across namespaces, and matching on name alone would jump to the
+	// first match (toward the top).
+	var prev k8s.Row
 	if r, ok := v.selected(); ok {
-		prev = r.Name
+		prev = r
 	}
 	if t == nil {
 		v.cols = nil
@@ -81,15 +84,16 @@ func (v *tableView) setData(t *k8s.Table) {
 		v.allRows = t.Rows
 	}
 	v.rebuild()
-	if prev != "" {
-		v.selectByName(prev)
+	if prev.Name != "" {
+		v.selectRow(prev.Namespace, prev.Name)
 	}
 }
 
-// selectByName moves the cursor to the row with the given name, if present.
-func (v *tableView) selectByName(name string) {
+// selectRow moves the cursor to the row matching the given namespace and name,
+// if present. An empty namespace matches on name alone.
+func (v *tableView) selectRow(namespace, name string) {
 	for i, r := range v.rows {
-		if r.Name == name {
+		if r.Name == name && (namespace == "" || r.Namespace == namespace) {
 			v.setCursor(i)
 			return
 		}

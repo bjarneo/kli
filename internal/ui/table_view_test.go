@@ -26,6 +26,31 @@ func TestTableSelectionFollowsRowAcrossRefresh(t *testing.T) {
 	}
 }
 
+func TestTableSelectionKeepsNamespaceAcrossRefresh(t *testing.T) {
+	// In all-namespaces mode a name can repeat across namespaces. The selection
+	// must follow the exact namespace+name, not the first name match (which sits
+	// higher in the list and would pull the cursor toward the top).
+	cols := []k8s.Column{{Name: "NAMESPACE"}, {Name: "NAME"}}
+	rows := []k8s.Row{
+		{Namespace: "team-a", Name: "redis", Cells: []string{"team-a", "redis"}},
+		{Namespace: "team-b", Name: "redis", Cells: []string{"team-b", "redis"}},
+		{Namespace: "team-c", Name: "redis", Cells: []string{"team-c", "redis"}},
+	}
+	v := newTableView(PickTheme("ansi"))
+	v.setSize(400, 20)
+	v.setData(&k8s.Table{Columns: cols, Rows: rows})
+	v.setCursor(2) // team-c/redis
+	if r, _ := v.selected(); r.Namespace != "team-c" {
+		t.Fatalf("setup: expected team-c selected, got %q", r.Namespace)
+	}
+
+	// Same set delivered by a live refresh: the cursor must stay on team-c.
+	v.setData(&k8s.Table{Columns: cols, Rows: append([]k8s.Row(nil), rows...)})
+	if r, _ := v.selected(); r.Namespace != "team-c" {
+		t.Fatalf("selection jumped to %q; namespace identity not preserved", r.Namespace)
+	}
+}
+
 func TestTableSwitchResetsSelectionToTop(t *testing.T) {
 	v := newTableView(PickTheme("ansi"))
 	v.setData(scrollTable())
