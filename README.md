@@ -47,10 +47,39 @@ ku                       # current context, remembered namespace
 ku -n kube-system        # start in a namespace
 ku --resource deploy     # start on a resource type
 ku --theme tokyonight    # switch theme
+ku --edit                # start in edit mode (default is read-only)
+ku --dev                 # developer view, app resources only
 ku upgrade               # replace the current binary with the latest release
 ```
 
 Press `?` for help and `Ctrl+K` for the command palette.
+
+## Modes
+
+`ku` starts read-only. Every mutating action is off: edit, delete, rollout
+restart, scale, CronJob trigger, cordon, drain, and shell into pods or nodes.
+Read, describe, YAML, logs, and the `kubectl` command preview still work. For
+all you fat-fingers out there, your cluster is safe.
+
+To make changes, open the command palette (`Ctrl+K`), pick "Enter edit mode",
+and confirm the prompt. The header chip flips from a green `● READ-ONLY` to a
+red `● EDIT`, and the mutating keys come back. Pick "Return to read-only" to
+switch back. Pass `--edit` to start in edit mode instead.
+
+`--dev` switches to a developer view that hides cluster admin resources (nodes,
+persistent volumes, storage classes, namespaces, events) and disables node
+operations. CRD discovery is off too. Use it when you only manage your own app.
+It composes with edit mode.
+
+```
+ku                       # read-only, full nav
+ku --edit                # edit mode, full nav
+ku --dev                 # read-only, developer view
+ku --dev --edit          # edit mode, developer view
+```
+
+Disabled keys are dropped from the footer hints and the command palette, and `?`
+summarizes the active mode.
 
 ## Configuration
 

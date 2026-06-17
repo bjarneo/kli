@@ -61,6 +61,26 @@ func defaultNavCatalog() []navCatGroup {
 	}
 }
 
+// devHiddenResource reports whether a resource is cluster-level infrastructure
+// that developer mode keeps out of the nav. Developers manage their own app, not
+// the cluster, so nodes, cluster-scoped storage, namespaces, and events are
+// dropped. Matched on the resolved resource so config aliases are covered too.
+func devHiddenResource(ri k8s.ResourceInfo) bool {
+	switch {
+	case ri.IsNodes():
+		return true
+	case ri.Group == "" && ri.Resource == "persistentvolumes":
+		return true
+	case ri.Group == "" && ri.Resource == "namespaces":
+		return true
+	case ri.Resource == "events" && (ri.Group == "" || ri.Group == "events.k8s.io"):
+		return true
+	case ri.Group == "storage.k8s.io" && ri.Resource == "storageclasses":
+		return true
+	}
+	return false
+}
+
 // overviewKey marks the sidebar entry that opens the cockpit dashboard;
 // discoverKey marks the CRD discovery button.
 const (
@@ -108,7 +128,7 @@ type sidebar struct {
 	height     int
 }
 
-func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup, crds []k8s.ResourceInfo, state crdState) sidebar {
+func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup, crds []k8s.ResourceInfo, state crdState, dev bool) sidebar {
 	s := sidebar{th: th}
 
 	// The cockpit overview is the first, always-present entry.
@@ -118,6 +138,10 @@ func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup, crds []k8s.R
 		var items []navEntry
 		for _, it := range sec.items {
 			if ri, ok := reg.Resolve(it.query); ok {
+				// Developer mode keeps cluster admin resources out of the nav.
+				if dev && devHiddenResource(ri) {
+					continue
+				}
 				items = append(items, navEntry{label: it.label, res: ri, key: ri.Key()})
 			}
 		}
@@ -133,8 +157,11 @@ func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup, crds []k8s.R
 		s.addSection("CRDs", items)
 	}
 
-	// The discovery button always sits at the bottom of the nav.
-	s.add(navEntry{discover: true, label: crdButtonLabel(state, len(crds)), key: discoverKey})
+	// The discovery button sits at the bottom of the nav. Developer mode does not
+	// surface CRD discovery, so it is omitted there.
+	if !dev {
+		s.add(navEntry{discover: true, label: crdButtonLabel(state, len(crds)), key: discoverKey})
+	}
 	return s
 }
 

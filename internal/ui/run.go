@@ -15,6 +15,8 @@ type Options struct {
 	Theme      string
 	Kubeconfig string // explicit kubeconfig path ("" = default lookup)
 	Version    string // running version, for the background update check ("dev" = skip)
+	Dev        bool   // developer scope: hide cluster admin resources and node ops
+	Edit       bool   // start in edit mode; the session is read-only by default
 }
 
 // Run starts the interactive TUI. The cluster connection and config load run in
@@ -33,6 +35,10 @@ func Run(opts Options) error {
 	th := PickTheme(name)
 
 	app := App{theme: th, keys: defaultKeys(), splash: true, opts: opts, saved: saved, hasSaved: hasSaved}
+	app.dev = opts.Dev
+	// Safe by default: the session starts read-only unless --edit is passed. It
+	// can be toggled at runtime from the command palette.
+	app.readOnly = !opts.Edit
 	app.spin = newSpinner(th)
 
 	m, err := tea.NewProgram(app).Run()

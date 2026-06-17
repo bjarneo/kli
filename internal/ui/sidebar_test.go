@@ -8,7 +8,7 @@ import (
 )
 
 func TestSidebarHasDiscoverButtonAtBottom(t *testing.T) {
-	s := newSidebar(PickTheme("ansi"), nil, nil, nil, crdNone)
+	s := newSidebar(PickTheme("ansi"), nil, nil, nil, crdNone, false)
 	last := s.entries[len(s.entries)-1]
 	if !last.discover || last.key != discoverKey {
 		t.Fatalf("expected the discovery button at the bottom, got %+v", last)
@@ -20,7 +20,7 @@ func TestSidebarPinsButtonAndStaysFixedHeight(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		crds = append(crds, k8s.ResourceInfo{Group: "g.io", Version: "v1", Resource: "res" + itoa(i), Kind: "Res" + itoa(i)})
 	}
-	s := newSidebar(PickTheme("ansi"), nil, nil, crds, crdReady)
+	s := newSidebar(PickTheme("ansi"), nil, nil, crds, crdReady, false)
 	s.setSize(24, 12)
 
 	out := s.View("", true) // cursor at the top, CRDs overflow below
@@ -35,7 +35,7 @@ func TestSidebarPinsButtonAndStaysFixedHeight(t *testing.T) {
 
 func TestDiscoverButtonStartsDiscovery(t *testing.T) {
 	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys()}
-	app.sidebar = newSidebar(app.theme, nil, nil, nil, crdNone)
+	app.sidebar = newSidebar(app.theme, nil, nil, nil, crdNone, false)
 
 	m, cmd := app.openNavEntry(navEntry{discover: true})
 	na := m.(App)
@@ -50,7 +50,7 @@ func TestDiscoverButtonStartsDiscovery(t *testing.T) {
 func TestCRDsDiscoveredPopulatesSidebar(t *testing.T) {
 	cl := &k8s.Client{}
 	app := App{client: cl, theme: PickTheme("ansi"), keys: defaultKeys(), width: 120, height: 40, screen: screenCockpit}
-	app.sidebar = newSidebar(app.theme, nil, nil, nil, crdNone)
+	app.sidebar = newSidebar(app.theme, nil, nil, nil, crdNone, false)
 	app.relayout()
 
 	crds := []k8s.ResourceInfo{

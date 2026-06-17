@@ -13,6 +13,7 @@ type helpView struct {
 	th     Theme
 	keys   keyMap
 	offset int
+	note   string // optional one-line mode summary shown under the title
 }
 
 func newHelpView(th Theme, keys keyMap) helpView {
@@ -102,6 +103,9 @@ func (h helpView) View(width, height int) string {
 		spacer = "\n"
 		frameRows = 3 // border plus title line
 	}
+	if h.note != "" {
+		frameRows++ // the mode summary takes one extra line
+	}
 	visible := height - frameRows
 	if visible < 1 {
 		visible = 1
@@ -124,7 +128,11 @@ func (h helpView) View(width, height int) string {
 	if maxOffset > 0 {
 		hint = h.th.Dim.Render(fmt.Sprintf("  ↑↓ scroll %d/%d · esc close", h.offset+1, maxOffset+1))
 	}
-	content := title + hint + spacer + grid
+	header := title + hint
+	if h.note != "" {
+		header += "\n" + h.th.Warn.Render(h.note)
+	}
+	content := header + spacer + grid
 
 	box := border.Render(content)
 	return box

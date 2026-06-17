@@ -125,6 +125,13 @@ type App struct {
 	statusErr bool
 
 	updateVersion string // newer release found by the background check ("" = none)
+
+	// Access mode. dev scopes the sidebar to app-level resources and disables node
+	// operations; it is set once at startup. readOnly blocks every mutating action
+	// and starts true (read-only) unless --edit is passed; it can be toggled at
+	// runtime from the command palette.
+	dev      bool
+	readOnly bool
 }
 
 func newSpinner(th Theme) spinner.Model {
@@ -148,7 +155,7 @@ func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
 func (a *App) connect(cl *k8s.Client, navCat []navCatGroup) {
 	a.client = cl
 	a.navCat = navCat
-	a.sidebar = newSidebar(a.theme, cl.Registry(), navCat, a.crds, a.crdState)
+	a.sidebar = newSidebar(a.theme, cl.Registry(), navCat, a.crds, a.crdState, a.dev)
 	a.cockpit = newCockpitView(a.theme)
 	a.table = newTableView(a.theme)
 	a.config = newConfigView(a.theme)
@@ -156,6 +163,7 @@ func (a *App) connect(cl *k8s.Client, navCat []navCatGroup) {
 	a.logs = newLogView(a.theme)
 	a.sel = newSelector(a.theme)
 	a.help = newHelpView(a.theme, a.keys)
+	a.help.note = a.modeNote()
 	a.term = newTermView(a.theme)
 	a.command = newCommandView(a.theme)
 
@@ -524,6 +532,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statusMsg:
 		a.setStatus(m.text, m.err)
+		return a, nil
+
+	case editModeMsg:
+		a.readOnly = !m.edit
+		a.help.note = a.modeNote()
+		if m.edit {
+			a.setStatus("edit mode on: mutating actions enabled", false)
+		} else {
+			a.setStatus("read-only mode: writes disabled", false)
+		}
 		return a, nil
 	}
 
@@ -1210,6 +1228,9 @@ func (a App) openNavEntry(e navEntry) (tea.Model, tea.Cmd) {
 // shows progress while the list call runs; the result arrives as a
 // crdsDiscoveredMsg.
 func (a App) discoverCRDs() (tea.Model, tea.Cmd) {
+	if a.dev {
+		return a, nil // developer mode does not surface CRD discovery
+	}
 	if a.crdState == crdLoading {
 		return a, nil // already in flight
 	}
@@ -1226,7 +1247,7 @@ func (a *App) rebuildSidebar() {
 	if e, ok := a.sidebar.current(); ok {
 		key = e.key
 	}
-	a.sidebar = newSidebar(a.theme, a.client.Registry(), a.navCat, a.crds, a.crdState)
+	a.sidebar = newSidebar(a.theme, a.client.Registry(), a.navCat, a.crds, a.crdState, a.dev)
 	if key != "" {
 		a.sidebar.syncTo(key)
 	}
@@ -1328,6 +1349,9 @@ func (a App) openShellOrScale() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openShell() (tea.Model, tea.Cmd) {
+	if a.denyReadOnly("shell") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1339,6 +1363,9 @@ func (a App) openShell() (tea.Model, tea.Cmd) {
 // openNodeShell starts a node shell by spawning a privileged debug pod on the
 // node (the host filesystem is mounted at /host), then exec'ing into it.
 func (a App) openNodeShell() (tea.Model, tea.Cmd) {
+	if a.denyNodeOps("node shell") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1523,6 +1550,49 @@ func (a App) startExec(cl *k8s.Client, ns, pod, container, title string, command
 	return a, tea.Batch(termTick(sess), waitTermDone(sess, result))
 }
 
+// editModeMsg flips the session between read-only and edit mode. Entering edit
+// mode goes through a confirm first (see toggleEditMode); leaving it is the safe
+// direction and is immediate.
+type editModeMsg struct{ edit bool }
+
+func enterEditMode() tea.Msg { return editModeMsg{edit: true} }
+func leaveEditMode() tea.Msg { return editModeMsg{edit: false} }
+
+// toggleEditMode switches between read-only and edit mode. Turning writes on asks
+// for confirmation, since that is the action that can change the cluster; turning
+// them back off is immediate.
+func (a App) toggleEditMode() (tea.Model, tea.Cmd) {
+	if a.readOnly {
+		return a.confirmAction("Enter edit mode",
+			"Enable edit mode? This turns on edit, delete, restart, scale, and the other mutating actions.",
+			true, enterEditMode)
+	}
+	return a, leaveEditMode
+}
+
+// denyReadOnly reports whether a mutating action is blocked by read-only mode,
+// emitting a status message when it is. verb is the action name shown.
+func (a *App) denyReadOnly(verb string) bool {
+	if a.readOnly {
+		a.setStatus(verb+": disabled in read-only mode", true)
+		return true
+	}
+	return false
+}
+
+// denyNodeOps reports whether a node operation is blocked. Node ops need write
+// access and are also off in developer mode, where nodes are out of scope.
+func (a *App) denyNodeOps(verb string) bool {
+	if a.denyReadOnly(verb) {
+		return true
+	}
+	if a.dev {
+		a.setStatus(verb+": disabled in developer mode", true)
+		return true
+	}
+	return false
+}
+
 func (a App) openEdit() (tea.Model, tea.Cmd) {
 	row, ok := a.table.selected()
 	if !ok {
@@ -1533,6 +1603,9 @@ func (a App) openEdit() (tea.Model, tea.Cmd) {
 
 func (a App) editTarget(t target) (tea.Model, tea.Cmd) {
 	if t.name == "" {
+		return a, nil
+	}
+	if a.denyReadOnly("edit") {
 		return a, nil
 	}
 	a.setStatus("opening editor…", false)
@@ -1672,6 +1745,9 @@ func (a App) openSort() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openScale() (tea.Model, tea.Cmd) {
+	if a.denyReadOnly("scale") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1683,6 +1759,9 @@ func (a App) openScale() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openDelete() (tea.Model, tea.Cmd) {
+	if a.denyReadOnly("delete") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1693,6 +1772,9 @@ func (a App) openDelete() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openRestart() (tea.Model, tea.Cmd) {
+	if a.denyReadOnly("restart") {
+		return a, nil
+	}
 	if !a.res.Restartable() {
 		a.setStatus("restart: deployments, statefulsets, daemonsets only", true)
 		return a, nil
@@ -1721,6 +1803,9 @@ func (a App) openCordon() (tea.Model, tea.Cmd) {
 		a.setStatus("cordon: switch to nodes first", true)
 		return a, nil
 	}
+	if a.denyNodeOps("cordon") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1735,6 +1820,9 @@ func (a App) openDrain() (tea.Model, tea.Cmd) {
 		a.setStatus("drain: switch to nodes first", true)
 		return a, nil
 	}
+	if a.denyNodeOps("drain") {
+		return a, nil
+	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
@@ -1744,6 +1832,9 @@ func (a App) openDrain() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openTriggerJobTarget(t target) (tea.Model, tea.Cmd) {
+	if a.denyReadOnly("trigger") {
+		return a, nil
+	}
 	if !t.res.IsCronJob() {
 		a.setStatus("trigger: switch to cronjobs first", true)
 		return a, nil
@@ -1794,7 +1885,7 @@ func (a App) adoptClient(cl *k8s.Client) (tea.Model, tea.Cmd) {
 	// discovered on the old cluster) may be stale.
 	a.crds = nil
 	a.crdState = crdNone
-	a.sidebar = newSidebar(a.theme, cl.Registry(), a.navCat, a.crds, a.crdState)
+	a.sidebar = newSidebar(a.theme, cl.Registry(), a.navCat, a.crds, a.crdState, a.dev)
 	a.namespace = cl.Namespace
 	a.lastNS = cl.Namespace
 	if a.lastNS == "" {
@@ -1829,40 +1920,53 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 	// Actions on the selected row come first, so the palette is a real
 	// discovery surface for what you can do right now.
 	if row, ok := a.table.selected(); ok {
+		// Mirror the footer hints: the palette only offers actions the current
+		// mode permits, so it never lists a command that fires a "disabled" toast.
+		writes := !a.readOnly
+		nodeOps := !a.readOnly && !a.dev
 		items = append(items,
 			selItem{title: "Open config for " + row.Name, desc: "enter", id: "act:config"},
 			selItem{title: "Describe " + row.Name, desc: "d", id: "act:describe"},
 			selItem{title: "View YAML", desc: "y", id: "act:yaml"},
-			selItem{title: "Edit in editor", desc: "e", id: "act:edit"},
-			selItem{title: "Delete " + row.Name, desc: "x", id: "act:delete"},
 		)
-		if a.res.IsPod() {
+		if writes {
 			items = append(items,
-				selItem{title: "Logs", desc: "l", id: "act:logs"},
-				selItem{title: "Shell into pod", desc: "s", id: "act:shell"},
+				selItem{title: "Edit in editor", desc: "e", id: "act:edit"},
+				selItem{title: "Delete " + row.Name, desc: "x", id: "act:delete"},
 			)
+		}
+		if a.res.IsPod() {
+			items = append(items, selItem{title: "Logs", desc: "l", id: "act:logs"})
+			if writes {
+				items = append(items, selItem{title: "Shell into pod", desc: "s", id: "act:shell"})
+			}
 		}
 		if a.res.IsDeployment() {
 			items = append(items, selItem{title: "Follow deployment logs", desc: "L", id: "act:deploylogs"})
 		}
-		if a.res.IsNodes() {
+		if nodeOps && a.res.IsNodes() {
 			items = append(items,
 				selItem{title: "Cordon / uncordon node", desc: "K", id: "act:cordon"},
 				selItem{title: "Drain node", desc: "D", id: "act:drain"},
 				selItem{title: "Node shell (debug pod)", desc: "s", id: "act:nodeshell"})
 		}
-		if a.res.Scalable() {
+		if writes && a.res.Scalable() {
 			items = append(items, selItem{title: "Scale", desc: "s", id: "act:scale"})
 		}
-		if a.res.Restartable() {
+		if writes && a.res.Restartable() {
 			items = append(items, selItem{title: "Rollout restart", desc: "R", id: "act:restart"})
 		}
-		if a.res.IsCronJob() {
+		if writes && a.res.IsCronJob() {
 			items = append(items, selItem{title: "Trigger job now", desc: "t", id: "act:trigger"})
 		}
 	}
 
+	editModeItem := selItem{title: "Enter edit mode", desc: "read-only", id: "cmd:editmode"}
+	if !a.readOnly {
+		editModeItem = selItem{title: "Return to read-only", desc: "edit mode", id: "cmd:editmode"}
+	}
 	items = append(items,
+		editModeItem,
 		selItem{title: "Open Kubernetes docs", desc: "O", id: "cmd:docs"},
 		selItem{title: "Jump to resource", desc: ":", id: "cmd:jump"},
 		selItem{title: "Filter list", desc: "/", id: "cmd:filter"},
@@ -1877,6 +1981,9 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 		selItem{title: "Quit", desc: "q", id: "cmd:quit"},
 	)
 	for _, ri := range a.client.Registry().All() {
+		if a.dev && devHiddenResource(ri) {
+			continue
+		}
 		items = append(items, selItem{title: ri.Resource, desc: resourceDesc(ri), id: "res:" + ri.Key()})
 	}
 	a.sel.open(selPalette, "Command palette", "type a command or resource", items, false)
@@ -1887,6 +1994,9 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 func (a App) openResourceJump() (tea.Model, tea.Cmd) {
 	var items []selItem
 	for _, ri := range a.client.Registry().All() {
+		if a.dev && devHiddenResource(ri) {
+			continue
+		}
 		items = append(items, selItem{title: ri.Resource, desc: resourceDesc(ri), id: ri.Key()})
 	}
 	a.sel.open(selResource, "Jump to resource", "pods, deploy, svc…", items, false)
@@ -2049,6 +2159,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		a.focus = focusMain
 		a.table.startFilter()
 		return a, nil
+	case "cmd:editmode":
+		return a.toggleEditMode()
 	case "cmd:kubectl":
 		return a.openCommand()
 	case "cmd:docs":
@@ -2244,6 +2356,11 @@ func (a App) headerView() string {
 		chip("ns", a.nsLabel()),
 		chip("res", resLabel),
 	}
+	// Developer scope is shown as a plain chip; the read/write state is the
+	// colored indicator on the right.
+	if a.dev {
+		chips = append(chips, chip("mode", "dev"))
+	}
 	// Surface an applied filter so a narrowed list never looks like the whole set.
 	if a.table.filterActive() && !a.table.filtering {
 		chips = append(chips, th.HeaderKey.Render("filter ")+th.Warn.Render("/"+truncate(a.table.filterValue(), 24)))
@@ -2257,6 +2374,8 @@ func (a App) headerView() string {
 		}
 		right = th.Dim.Render(label)
 	}
+	// Access-mode indicator: red when writes are enabled, green when read-only.
+	right = strings.Join(nonEmpty([]string{a.modeChip(), right}), "  ")
 
 	avail := a.width - lipgloss.Width(right) - 2
 	left := logo
@@ -2281,6 +2400,29 @@ func (a App) headerView() string {
 		return left
 	}
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// modeChip renders the access-mode indicator shown in the header: red "● EDIT"
+// when mutating actions are enabled, green "● READ-ONLY" when they are blocked.
+func (a App) modeChip() string {
+	if a.readOnly {
+		return a.theme.StatusOK.Render("● READ-ONLY")
+	}
+	return a.theme.StatusErr.Render("● EDIT")
+}
+
+// modeNote is a one-line summary of the active mode for the help screen. It is
+// empty in the default full read/write mode, which needs no callout.
+func (a App) modeNote() string {
+	switch {
+	case a.dev && a.readOnly:
+		return "Developer + read-only mode: nav scoped to app resources; all writes disabled"
+	case a.dev:
+		return "Developer mode: nav scoped to app resources; node ops disabled"
+	case a.readOnly:
+		return "Read-only mode: writes are disabled. Fat-fingers, your cluster is safe."
+	}
+	return ""
 }
 
 type hint struct{ key, desc string }
@@ -2355,19 +2497,25 @@ func (a App) hints() []hint {
 		if a.configTarget.res.IsDeployment() {
 			h = append(h, hint{"L", "all logs"})
 		}
-		if a.configTarget.res.IsCronJob() {
+		if !a.readOnly && a.configTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		if !a.readOnly {
+			h = append(h, hint{"e", "edit"})
+		}
+		return append(h, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenDetail:
 		h := []hint{{"↑↓", "scroll"}, {"enter", "config"}}
 		if a.detailTarget.res.IsDeployment() {
 			h = append(h, hint{"L", "all logs"})
 		}
-		if a.detailTarget.res.IsCronJob() {
+		if !a.readOnly && a.detailTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		if !a.readOnly {
+			h = append(h, hint{"e", "edit"})
+		}
+		return append(h, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
 		switch {
 		case a.logs.selecting && a.logs.marking:
@@ -2387,25 +2535,39 @@ func (a App) hints() []hint {
 	}
 
 	// Context-aware: surface the actions that apply to the current resource.
+	// Mutating actions are hidden when the mode disables them, so the footer
+	// never advertises a key that does nothing.
+	writes := !a.readOnly
+	nodeOps := !a.readOnly && !a.dev
 	h := []hint{{"enter", "config"}, {"d", "describe"}}
 	switch {
 	case a.res.IsPod():
-		h = append(h, hint{"l", "logs"}, hint{"s", "shell"})
+		h = append(h, hint{"l", "logs"})
+		if writes {
+			h = append(h, hint{"s", "shell"})
+		}
 	case a.res.IsDeployment():
 		h = append(h, hint{"L", "all logs"})
 	case a.res.IsNodes():
-		h = append(h, hint{"s", "node shell"}, hint{"K", "cordon"}, hint{"D", "drain"})
+		if nodeOps {
+			h = append(h, hint{"s", "node shell"}, hint{"K", "cordon"}, hint{"D", "drain"})
+		}
 	case a.res.Scalable():
-		h = append(h, hint{"s", "scale"})
+		if writes {
+			h = append(h, hint{"s", "scale"})
+		}
 	}
-	if a.res.Restartable() {
+	if writes && a.res.Restartable() {
 		h = append(h, hint{"R", "restart"})
 	}
-	if a.res.IsCronJob() {
+	if writes && a.res.IsCronJob() {
 		h = append(h, hint{"t", "trigger"})
 	}
+	if writes {
+		h = append(h, hint{"e", "edit"}, hint{"x", "del"})
+	}
 	h = append(h,
-		hint{"e", "edit"}, hint{"x", "del"}, hint{"/", "filter"}, hint{"S", "sort"}, hint{"O", "docs"}, hint{"C", "cmd"},
+		hint{"/", "filter"}, hint{"S", "sort"}, hint{"O", "docs"}, hint{"C", "cmd"},
 		hint{"tab", "nav"}, hint{"^k", "palette"}, hint{"?", "help"}, hint{"q", "quit"})
 	if a.table.filterActive() {
 		h = append([]hint{{"esc", "clear filter"}}, h...)

@@ -37,7 +37,7 @@ func main() {
 
 	var (
 		ctxFlag, nsFlag, resFlag, themeFlag, kubeconfigFlag string
-		checkFlag, versionFlag                              bool
+		checkFlag, versionFlag, devFlag, editFlag           bool
 	)
 	flag.StringVar(&ctxFlag, "context", "", "kubeconfig context to use (default: current-context)")
 	flag.StringVar(&nsFlag, "namespace", "", "initial namespace (empty = all namespaces)")
@@ -45,6 +45,8 @@ func main() {
 	flag.StringVar(&resFlag, "resource", "", "initial resource, e.g. pods, deploy, svc")
 	flag.StringVar(&themeFlag, "theme", "", "color theme: ansi (default) or tokyonight")
 	flag.StringVar(&kubeconfigFlag, "kubeconfig", "", "path to the kubeconfig file (default: $KUBECONFIG or ~/.kube/config)")
+	flag.BoolVar(&devFlag, "dev", false, "developer view: hide cluster admin resources and node ops")
+	flag.BoolVar(&editFlag, "edit", false, "start in edit mode; default is read-only, toggle from the command palette")
 	flag.BoolVar(&checkFlag, "check", false, "run a read-only connectivity check and exit")
 	flag.BoolVar(&versionFlag, "version", false, "print version and exit")
 	flag.Parse()
@@ -68,6 +70,8 @@ func main() {
 		Theme:      themeFlag,
 		Kubeconfig: kubeconfigFlag,
 		Version:    version,
+		Dev:        devFlag,
+		Edit:       editFlag,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
