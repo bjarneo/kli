@@ -303,11 +303,11 @@ func TestLogClearKeyEmptiesBufferAndResumesFollow(t *testing.T) {
 	}
 	app.logs.follow = false // a paused, scrolled-up view
 
-	// C must reach the logs handler, not the global kubectl-command overlay.
-	m, _ := app.handleKey(mkKey("C"))
+	// ctrl+l clears the buffer; it does not collide with any global shortcut.
+	m, _ := app.handleKey(mkKey("ctrl+l"))
 	a := m.(App)
 	if a.overlay != overlayNone {
-		t.Fatalf("C in logs should clear, not open an overlay (got overlay %v)", a.overlay)
+		t.Fatalf("ctrl+l in logs should clear, not open an overlay (got overlay %v)", a.overlay)
 	}
 	if len(a.logs.lines) != 0 || a.logs.content != "" || a.logs.matched != 0 {
 		t.Fatalf("clear should empty the buffer: lines=%d content=%q matched=%d",

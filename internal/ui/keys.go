@@ -99,7 +99,7 @@ func defaultKeys() keyMap {
 		Mark:    key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "mark")),
 		Copy:    key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy selection")),
 		CopyAll: key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy all")),
-		Clear:   key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "clear")),
+		Clear:   key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("^l", "clear")),
 
 		Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Back: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),

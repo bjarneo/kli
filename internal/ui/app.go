@@ -712,9 +712,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// The logs screen rebinds C to "clear", so don't let the global kubectl
-	// command shortcut shadow it there.
-	if !a.filterInput() && a.screen != screenLogs && key.Matches(msg, a.keys.Command) {
+	if !a.filterInput() && key.Matches(msg, a.keys.Command) {
 		return a.openCommand()
 	}
 	if !a.filterInput() && key.Matches(msg, a.keys.Docs) {
@@ -2246,7 +2244,7 @@ func (a App) hints() []hint {
 		case a.logs.selecting:
 			return []hint{{"↑↓", "move"}, {"m", "mark"}, {"y", "copy"}, {"esc", "cancel"}}
 		}
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"c", "copy"}, {"C", "clear"}, {"O", "docs"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"c", "copy"}, {"^l", "clear"}, {"O", "docs"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
 			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}

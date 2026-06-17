@@ -55,7 +55,7 @@ show a node shell, workloads show scale and restart, and CronJobs show trigger.
 
 | Context | Keys |
 | --- | --- |
-| Logs | `f` follow, `/` filter (regex), `w` (or `Ctrl+w` while filtering) wrap / truncate lines, `c` copy all, `C` clear, `v` select lines, `g` / `G` top / bottom, `esc` back |
+| Logs | `f` follow, `/` filter (regex), `w` (or `Ctrl+w` while filtering) wrap / truncate lines, `c` copy all, `Ctrl+l` clear, `v` select lines, `g` / `G` top / bottom, `esc` back |
 | Logs (selecting) | `↑` / `↓` (and `g` / `G`, page keys) move the cursor, `m` mark, `y` / `Enter` copy, `esc` cancel |
 | Config summary | scroll, `d` / `y` YAML, `e` edit, `t` trigger CronJob, `esc` back |
 | Detail (YAML) | scroll, `Enter` config, `e` edit, `t` trigger CronJob, `esc` back |
@@ -78,6 +78,6 @@ Two ways to mark and copy log lines:
   wheel does not scroll here.)
 
 To grab the whole buffer at once, press `c` to copy every buffered line to the
-clipboard (the raw lines, so an active filter never hides anything). Press `C`
-to clear the on-screen buffer; the stream keeps running, so new lines flow back
-in right away.
+clipboard (the raw lines, so an active filter never hides anything). Press
+`Ctrl+l` to clear the on-screen buffer; the stream keeps running, so new lines
+flow back in right away.
