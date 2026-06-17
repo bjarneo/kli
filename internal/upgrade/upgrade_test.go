@@ -62,6 +62,28 @@ func TestAssetName(t *testing.T) {
 	}
 }
 
+func TestIsNewer(t *testing.T) {
+	tests := []struct {
+		current, latest string
+		want            bool
+	}{
+		{"v0.2.0", "v0.3.0", true},     // newer minor
+		{"v0.3.0", "v0.3.1", true},     // newer patch
+		{"v0.3.0", "v1.0.0", true},     // newer major
+		{"v0.3.0", "v0.3.0", false},    // equal
+		{"v0.3.0", "v0.2.9", false},    // older latest
+		{"0.2.0", "0.3.0", true},       // missing v prefix
+		{"v0.3.0", "v0.3.1-rc1", true}, // pre-release suffix ignored on the numbers
+		{"dev", "v9.9.9", false},       // dev build never nags
+		{"", "v9.9.9", false},          // unset build never nags
+	}
+	for _, tt := range tests {
+		if got := IsNewer(tt.current, tt.latest); got != tt.want {
+			t.Errorf("IsNewer(%q, %q) = %v; want %v", tt.current, tt.latest, got, tt.want)
+		}
+	}
+}
+
 func TestLatestVersionSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "/repos/") || !strings.HasSuffix(r.URL.Path, "/releases/latest") {

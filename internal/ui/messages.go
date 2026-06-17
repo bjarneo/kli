@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/bjarneo/ku/internal/k8s"
+	"github.com/bjarneo/ku/internal/upgrade"
 )
 
 const (
@@ -137,6 +138,10 @@ type startupReadyMsg struct {
 	err     error
 }
 
+// updateAvailableMsg carries a newer release tag found by the background update
+// check. It is sent only when a strictly newer release exists.
+type updateAvailableMsg struct{ latest string }
+
 // --- commands ---------------------------------------------------------------
 
 func opCtx() (context.Context, context.CancelFunc) {
@@ -167,6 +172,20 @@ func startupCmd(opts Options, saved savedState, hasSaved bool) tea.Cmd {
 			}
 		}
 		return startupReadyMsg{client: cl, catalog: catalog, cfgErr: cfgErr}
+	}
+}
+
+// checkUpdateCmd asks GitHub for the latest release off the UI thread, so the
+// network call never delays startup. It reports a version only when one is
+// strictly newer than current; on any error (offline, rate-limited) or when up
+// to date, latest is empty and the UI stays quiet.
+func checkUpdateCmd(current string) tea.Cmd {
+	return func() tea.Msg {
+		latest, err := upgrade.Latest()
+		if err != nil || !upgrade.IsNewer(current, latest) {
+			return nil // no update, offline, or rate-limited: stay quiet
+		}
+		return updateAvailableMsg{latest: latest}
 	}
 }
 

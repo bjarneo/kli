@@ -123,6 +123,8 @@ type App struct {
 	loading   bool
 	status    string
 	statusErr bool
+
+	updateVersion string // newer release found by the background check ("" = none)
 }
 
 func newSpinner(th Theme) spinner.Model {
@@ -211,8 +213,8 @@ func (a App) adoptStartup(m startupReadyMsg) (tea.Model, tea.Cmd) {
 func (a App) Init() tea.Cmd {
 	if a.splash {
 		// Animate the spinner while the cluster connection and config load run in
-		// the background.
-		return tea.Batch(a.spin.Tick, startupCmd(a.opts, a.saved, a.hasSaved))
+		// the background. The update check runs alongside and never blocks startup.
+		return tea.Batch(a.spin.Tick, startupCmd(a.opts, a.saved, a.hasSaved), checkUpdateCmd(a.opts.Version))
 	}
 	return tea.Batch(a.spin.Tick, tickCmd(), a.loadCmd())
 }
@@ -306,6 +308,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case startupReadyMsg:
 		return a.adoptStartup(m)
+
+	case updateAvailableMsg:
+		// Persistent, unobtrusive: the footer shows the notice until the binary is
+		// upgraded. Sent only when a newer release exists (see checkUpdateCmd).
+		a.updateVersion = m.latest
+		return a, nil
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -2241,14 +2249,14 @@ func (a App) footerView() string {
 		statusSeg = th.Spinner.Render(a.spin.View()) + th.Dim.Render(" loading")
 	}
 
-	right := credit
-	if statusSeg != "" {
-		if credit != "" {
-			right = statusSeg + "  " + credit
-		} else {
-			right = statusSeg
-		}
+	// A newer release nags from the footer until the user upgrades. Hidden while a
+	// transient status or the loading spinner owns the slot, and on narrow widths.
+	updateSeg := ""
+	if a.updateVersion != "" && statusSeg == "" && a.width >= 60 {
+		updateSeg = th.HeaderVal.Render("↑ "+a.updateVersion) + th.Dim.Render(" · ku upgrade")
 	}
+
+	right := strings.Join(nonEmpty([]string{statusSeg, updateSeg, credit}), "  ")
 
 	if a.screen == screenTable && a.table.filtering && a.overlay == overlayNone {
 		left := th.FooterKey.Render(a.table.filter.View())

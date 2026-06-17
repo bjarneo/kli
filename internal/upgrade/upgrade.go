@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -67,6 +68,53 @@ func Run(currentVersion string) error {
 
 	fmt.Printf("Upgraded to %s\n", latest)
 	return nil
+}
+
+// Latest returns the most recent published release tag (e.g. "v0.3.0"). It is
+// the read-only half of Run, used by the UI to check for updates in the
+// background without touching the binary.
+func Latest() (string, error) {
+	return latestVersion()
+}
+
+// IsNewer reports whether latest is a strictly greater release than current.
+// A development or unset current ("", "dev") returns false: there is no
+// released version to compare against, so there is nothing to nag about.
+func IsNewer(current, latest string) bool {
+	current = strings.TrimSpace(current)
+	if current == "" || current == "dev" {
+		return false
+	}
+	return compareSemver(latest, current) > 0
+}
+
+// compareSemver returns 1 if a > b, -1 if a < b, and 0 if equal, comparing the
+// major.minor.patch triplets and ignoring any pre-release or build suffix.
+func compareSemver(a, b string) int {
+	pa, pb := parseSemver(a), parseSemver(b)
+	for i := 0; i < 3; i++ {
+		switch {
+		case pa[i] > pb[i]:
+			return 1
+		case pa[i] < pb[i]:
+			return -1
+		}
+	}
+	return 0
+}
+
+// parseSemver extracts the leading major.minor.patch numbers from a tag like
+// "v1.2.3" or "1.2.3-rc1". Missing or non-numeric parts read as 0.
+func parseSemver(s string) [3]int {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	if i := strings.IndexAny(s, "-+"); i >= 0 {
+		s = s[:i]
+	}
+	var v [3]int
+	for i, part := range strings.SplitN(s, ".", 3) {
+		v[i], _ = strconv.Atoi(strings.TrimSpace(part))
+	}
+	return v
 }
 
 func assetName(goos, goarch string) (string, error) {

@@ -14,6 +14,7 @@ type Options struct {
 	Resource   string
 	Theme      string
 	Kubeconfig string // explicit kubeconfig path ("" = default lookup)
+	Version    string // running version, for the background update check ("dev" = skip)
 }
 
 // Run starts the interactive TUI. The cluster connection and config load run in

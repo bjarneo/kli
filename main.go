@@ -67,6 +67,7 @@ func main() {
 		Resource:   resFlag,
 		Theme:      themeFlag,
 		Kubeconfig: kubeconfigFlag,
+		Version:    version,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
