@@ -54,7 +54,7 @@ ku --version
 | `--kubeconfig` | path to the kubeconfig file (default: `$KUBECONFIG`, then `~/.kube/config`) |
 | `-n`, `--namespace` | initial namespace; omit to use the remembered or context namespace |
 | `--resource` | initial resource, e.g. `pods`, `deploy`, `svc` |
-| `--theme` | `ansi` (default) or `tokyonight` |
+| `--theme` | `ansi` (default) or a built-in theme, e.g. `dracula`, `gruvbox`, `catppuccin` (see Themes) |
 | `--check` | run a read-only connectivity check and exit |
 | `--version` | print version and exit |
 
@@ -79,13 +79,16 @@ pane has a highlighted border.
 
 ## Themes
 
-The default theme uses your terminal's own ANSI palette and adapts to a light or
-dark background, so it matches whatever scheme you already run. For a fixed,
-high-contrast look, pass `--theme tokyonight` or set `KU_THEME=tokyonight`.
+The default `ansi` theme uses your terminal's own palette and adapts to a light
+or dark background, so it matches whatever scheme you already run. ku also ships
+37 fixed themes (Catppuccin, Dracula, Gruvbox, Nord, Rose Pine, Solarized, Tokyo
+Night, and more), each with a light and dark variant chosen from your terminal
+background. Pick one with `--theme <name>` or `KU_THEME=<name>`.
 
 You can also switch live from inside the app: open the command palette
-(`Ctrl+K`) and pick **Switch theme**. The choice is remembered for the next
-launch, unless `--theme` or `KU_THEME` is set (those still take precedence).
+(`Ctrl+K`) and pick **Switch theme**. Navigating the list previews each theme in
+place; the choice is remembered for the next launch, unless `--theme` or
+`KU_THEME` is set (those still take precedence).
 
 ## Configuration
 

@@ -68,26 +68,6 @@ func ansiPalette(dark bool) Palette {
 	}
 }
 
-// tokyoNightPalette is the fallback theme: a fixed, high-contrast palette for
-// terminals whose ANSI colors are undefined or unpleasant.
-func tokyoNightPalette() Palette {
-	return Palette{
-		Accent:     lipgloss.Color("#7aa2f7"), // blue
-		Accent2:    lipgloss.Color("#bb9af7"), // magenta
-		Fg:         lipgloss.Color("#c0caf5"),
-		Muted:      lipgloss.Color("#7f849c"),
-		Border:     lipgloss.Color("#3b4261"),
-		Good:       lipgloss.Color("#9ece6a"), // green
-		Warn:       lipgloss.Color("#e0af68"), // yellow
-		Bad:        lipgloss.Color("#f7768e"), // red
-		SelFg:      lipgloss.Color("#c0caf5"),
-		SelBg:      lipgloss.Color("#283457"),
-		HeaderBg:   lipgloss.Color("#7aa2f7"),
-		LogoFg:     lipgloss.Color("#16161e"),
-		ReverseSel: false,
-	}
-}
-
 // Theme bundles a palette with the precomputed styles the views render with.
 type Theme struct {
 	Name string
@@ -180,9 +160,9 @@ func NewTheme(name string, p Palette) Theme {
 }
 
 // PickTheme selects the theme at startup. ANSI is the default and adapts to a
-// light or dark terminal background; Tokyo Night is the fixed fallback,
-// selectable via --theme or $KU_THEME. Background detection runs here (before
-// the Bubble Tea program starts) so it does not race the program's stdin reader.
+// light or dark terminal background; the built-in themes are selectable via
+// --theme or $KU_THEME. Background detection runs here (before the Bubble Tea
+// program starts) so it does not race the program's stdin reader.
 func PickTheme(name string) Theme {
 	if name == "" {
 		name = os.Getenv("KU_THEME")
@@ -191,26 +171,34 @@ func PickTheme(name string) Theme {
 }
 
 // buildTheme constructs a theme by name without touching the terminal, so it is
-// safe to call mid-session.
+// safe to call mid-session. Built-in themes pick their light or dark variant
+// from dark; ansi adapts the terminal's own palette.
 func buildTheme(name string, dark bool) Theme {
-	var t Theme
-	switch normalizeThemeName(name) {
-	case "tokyonight":
-		t = NewTheme("tokyonight", tokyoNightPalette())
-	default:
-		t = NewTheme("ansi", ansiPalette(dark))
+	id := normalizeThemeName(name)
+	if oc, ok := ocByID[id]; ok {
+		sub := oc.dark
+		if !dark {
+			sub = oc.light
+		}
+		t := NewTheme(id, ocToPalette(sub))
+		t.Dark = dark
+		return t
 	}
+	t := NewTheme("ansi", ansiPalette(dark))
 	t.Dark = dark
 	return t
 }
 
 func normalizeThemeName(name string) string {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "tokyonight", "tokyo-night", "tokyo":
+	n := strings.ToLower(strings.TrimSpace(name))
+	switch n {
+	case "tokyo", "tokyo-night":
 		return "tokyonight"
-	default:
-		return "ansi"
 	}
+	if _, ok := ocByID[n]; ok {
+		return n
+	}
+	return "ansi"
 }
 
 type themeEntry struct {
@@ -219,8 +207,10 @@ type themeEntry struct {
 }
 
 func themeCatalog() []themeEntry {
-	return []themeEntry{
-		{id: "ansi", title: "ANSI"},
-		{id: "tokyonight", title: "Tokyo Night"},
+	out := make([]themeEntry, 0, len(ocThemeList)+1)
+	out = append(out, themeEntry{id: "ansi", title: "ANSI"})
+	for _, t := range ocThemeList {
+		out = append(out, themeEntry{id: t.id, title: t.title})
 	}
+	return out
 }
