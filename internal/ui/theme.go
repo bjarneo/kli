@@ -92,6 +92,7 @@ func tokyoNightPalette() Palette {
 type Theme struct {
 	Name string
 	P    Palette
+	Dark bool // terminal background detected at startup, for rebuilding the ANSI palette
 
 	Logo      lipgloss.Style
 	HeaderKey lipgloss.Style
@@ -178,18 +179,48 @@ func NewTheme(name string, p Palette) Theme {
 	return t
 }
 
-// PickTheme selects the theme. ANSI is the default and adapts to a light or
-// dark terminal background; Tokyo Night is the fixed fallback, selectable via
-// --theme or $KU_THEME. Detection runs here (called before the Bubble Tea
-// program starts) so it does not race the program's stdin reader.
+// PickTheme selects the theme at startup. ANSI is the default and adapts to a
+// light or dark terminal background; Tokyo Night is the fixed fallback,
+// selectable via --theme or $KU_THEME. Background detection runs here (before
+// the Bubble Tea program starts) so it does not race the program's stdin reader.
 func PickTheme(name string) Theme {
 	if name == "" {
 		name = os.Getenv("KU_THEME")
 	}
+	return buildTheme(name, lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
+}
+
+// buildTheme constructs a theme by name without touching the terminal, so it is
+// safe to call mid-session.
+func buildTheme(name string, dark bool) Theme {
+	var t Theme
+	switch normalizeThemeName(name) {
+	case "tokyonight":
+		t = NewTheme("tokyonight", tokyoNightPalette())
+	default:
+		t = NewTheme("ansi", ansiPalette(dark))
+	}
+	t.Dark = dark
+	return t
+}
+
+func normalizeThemeName(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "tokyonight", "tokyo-night", "tokyo":
-		return NewTheme("tokyonight", tokyoNightPalette())
+		return "tokyonight"
 	default:
-		return NewTheme("ansi", ansiPalette(lipgloss.HasDarkBackground(os.Stdin, os.Stdout)))
+		return "ansi"
+	}
+}
+
+type themeEntry struct {
+	id    string
+	title string
+}
+
+func themeCatalog() []themeEntry {
+	return []themeEntry{
+		{id: "ansi", title: "ANSI"},
+		{id: "tokyonight", title: "Tokyo Night"},
 	}
 }

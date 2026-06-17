@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -19,8 +20,16 @@ type Options struct {
 // the background behind a splash screen (see startupCmd / adoptStartup); flags
 // take precedence over the remembered context/namespace from the last session.
 func Run(opts Options) error {
-	th := PickTheme(opts.Theme)
 	saved, hasSaved := loadState()
+	// Theme precedence: --theme flag, then $KU_THEME, then the remembered choice.
+	name := opts.Theme
+	if name == "" {
+		name = os.Getenv("KU_THEME")
+	}
+	if name == "" {
+		name = saved.Theme
+	}
+	th := PickTheme(name)
 
 	app := App{theme: th, keys: defaultKeys(), splash: true, opts: opts, saved: saved, hasSaved: hasSaved}
 	app.spin = newSpinner(th)

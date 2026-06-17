@@ -19,6 +19,7 @@ const (
 	selExecContainer
 	selScale
 	selSort
+	selTheme
 )
 
 const selMaxVisible = 12
@@ -138,6 +139,25 @@ func (s *selector) clampCursor() {
 	}
 	if s.offset < 0 {
 		s.offset = 0
+	}
+}
+
+func (s selector) current() (selItem, bool) {
+	if s.cursor < 0 || s.cursor >= len(s.match) {
+		return selItem{}, false
+	}
+	return s.items[s.match[s.cursor]], true
+}
+
+// focusID moves the cursor onto the item with the given id, so the list can open
+// with a specific entry highlighted instead of the first.
+func (s *selector) focusID(id string) {
+	for i, m := range s.match {
+		if s.items[m].id == id {
+			s.cursor = i
+			s.clampCursor()
+			return
+		}
 	}
 }
 

@@ -114,6 +114,7 @@ type App struct {
 	detailTarget target
 	logTarget    target
 	execTarget   target
+	themeBase    string // theme to restore on theme-picker cancel
 
 	logSession int
 	loadSeq    int
@@ -1055,16 +1056,23 @@ func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) updateSelector(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	previewing := a.sel.kind == selTheme
 	var res selResult
 	var cmd tea.Cmd
 	a.sel, res, cmd = a.sel.Update(msg)
 	switch {
 	case res.canceled:
 		a.overlay = overlayNone
+		if previewing {
+			a.applyTheme(buildTheme(a.themeBase, a.theme.Dark))
+		}
 		return a, nil
 	case res.accepted:
 		a.overlay = overlayNone
 		return a.applySelection(res)
+	}
+	if previewing {
+		a.previewTheme()
 	}
 	return a, cmd
 }
@@ -1794,6 +1802,7 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 		selItem{title: "All namespaces", desc: "a", id: "cmd:allns"},
 		selItem{title: "Switch context", desc: "c", id: "cmd:context"},
 		selItem{title: "Toggle wide columns", desc: "w", id: "cmd:wide"},
+		selItem{title: "Switch theme", desc: "", id: "cmd:theme"},
 		selItem{title: "Help", desc: "?", id: "cmd:help"},
 		selItem{title: "Quit", desc: "q", id: "cmd:quit"},
 	)
@@ -1833,6 +1842,49 @@ func (a App) openContextPicker() (tea.Model, tea.Cmd) {
 	a.sel.open(selContext, "Switch context", "context", items, false)
 	a.overlay = overlaySelector
 	return a, nil
+}
+
+func (a App) openThemePicker() (tea.Model, tea.Cmd) {
+	a.themeBase = a.theme.Name
+	cat := themeCatalog()
+	items := make([]selItem, 0, len(cat))
+	for _, t := range cat {
+		desc := ""
+		if t.id == a.theme.Name {
+			desc = "current"
+		}
+		items = append(items, selItem{title: t.title, desc: desc, id: t.id})
+	}
+	a.sel.open(selTheme, "Switch theme", "theme", items, false)
+	a.sel.focusID(a.theme.Name)
+	a.overlay = overlaySelector
+	return a, nil
+}
+
+// applyTheme restyles every view in place, preserving their state. The spinner
+// style and selector prompt are the only styles baked at construction.
+func (a *App) applyTheme(th Theme) {
+	a.theme = th
+	a.spin.Style = th.Spinner
+	a.sel.th = th
+	a.sel.input.Prompt = th.Prompt.Render("❯ ")
+	a.sidebar.th = th
+	a.cockpit.th = th
+	a.table.th = th
+	a.config.th = th
+	a.detail.th = th
+	a.logs.th = th
+	a.help.th = th
+	a.term.th = th
+	a.command.th = th
+	a.confirm.th = th
+}
+
+// previewTheme live-applies the highlighted theme without persisting it.
+func (a *App) previewTheme() {
+	if it, ok := a.sel.current(); ok && it.id != a.theme.Name {
+		a.applyTheme(buildTheme(it.id, a.theme.Dark))
+	}
 }
 
 func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
@@ -1875,6 +1927,10 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 	case selSort:
 		idx, _ := strconv.Atoi(res.id)
 		a.table.setSort(idx)
+		return a, nil
+	case selTheme:
+		a.applyTheme(buildTheme(res.id, a.theme.Dark))
+		a.persist()
 		return a, nil
 	}
 	return a, nil
@@ -1934,6 +1990,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 	case "cmd:wide":
 		a.table.toggleWide()
 		return a, nil
+	case "cmd:theme":
+		return a.openThemePicker()
 	case "cmd:help":
 		a.help.reset()
 		a.overlay = overlayHelp
@@ -2337,7 +2395,7 @@ func trimErr(err error) string {
 	return truncate(s, 120)
 }
 
-// persist remembers the current context and namespace for the next launch.
+// persist remembers the current context, namespace, and theme for the next launch.
 func (a App) persist() {
-	saveState(savedState{Context: a.client.ContextName, Namespace: a.namespace})
+	saveState(savedState{Context: a.client.ContextName, Namespace: a.namespace, Theme: a.theme.Name})
 }

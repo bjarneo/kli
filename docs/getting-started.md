@@ -83,6 +83,10 @@ The default theme uses your terminal's own ANSI palette and adapts to a light or
 dark background, so it matches whatever scheme you already run. For a fixed,
 high-contrast look, pass `--theme tokyonight` or set `KU_THEME=tokyonight`.
 
+You can also switch live from inside the app: open the command palette
+(`Ctrl+K`) and pick **Switch theme**. The choice is remembered for the next
+launch, unless `--theme` or `KU_THEME` is set (those still take precedence).
+
 ## Configuration
 
 ku reads optional sidebar config from `~/.config/ku/config.yaml`. Use
@@ -93,6 +97,6 @@ resource names, and opt-in resources.
 
 ## Session memory
 
-ku remembers the last context and namespace you used and restores them on the
-next launch. Flags override the remembered values. State is written to
+ku remembers the last context, namespace, and theme you used and restores them
+on the next launch. Flags override the remembered values. State is written to
 `~/.config/ku/state.json`.

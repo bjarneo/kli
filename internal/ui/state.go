@@ -6,11 +6,12 @@ import (
 	"path/filepath"
 )
 
-// savedState remembers the last context and namespace so the next launch
-// resumes where you left off. Neither value is sensitive.
+// savedState remembers the last context, namespace, and theme so the next
+// launch resumes where you left off. None of the values are sensitive.
 type savedState struct {
 	Context   string `json:"context"`
 	Namespace string `json:"namespace"`
+	Theme     string `json:"theme"`
 }
 
 func stateFile() (string, error) {
