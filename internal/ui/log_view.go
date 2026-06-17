@@ -236,6 +236,31 @@ func (l *logView) copySelection() string {
 	return strings.Join(rows, "\n")
 }
 
+// copyAll returns the entire buffered log as plain text (ANSI stripped). It
+// copies the raw line set, not the filtered view, so an active filter never
+// hides lines from the clipboard.
+func (l *logView) copyAll() string {
+	rows := make([]string, len(l.lines))
+	for i, ln := range l.lines {
+		rows[i] = ansi.Strip(ln)
+	}
+	return strings.Join(rows, "\n")
+}
+
+// clear empties the log buffer and the viewport. The stream keeps running in
+// the background, so fresh lines flow back in immediately after. Re-enable
+// follow so the cleared view tracks those new lines: a clear reads as "fresh
+// start, show me what's coming next", which only makes sense scrolled to the
+// tail. The filter is left intact, so a clear keeps narrowing the stream.
+func (l *logView) clear() {
+	l.lines = nil
+	l.content = ""
+	l.matched = 0
+	l.follow = true
+	l.vp.SetContent("")
+	l.stickToBottom()
+}
+
 // rebuildContent recomputes the joined view from scratch, applying the active
 // filter. Used when the line set or the filter changes.
 func (l *logView) rebuildContent() {

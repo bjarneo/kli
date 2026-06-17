@@ -259,3 +259,70 @@ func TestLogFilterAppliesToNewLines(t *testing.T) {
 		t.Fatalf("streamed non-matching lines must stay hidden:\n%s", l.content)
 	}
 }
+
+func TestLogCopyAllReturnsWholeBufferIgnoringFilter(t *testing.T) {
+	l := newTestLogView()
+	l.appendLine("keep me")
+	l.appendLine("drop me")
+
+	setFilter(&l, "keep") // only "keep me" is visible on screen
+	if l.matched != 1 {
+		t.Fatalf("filter should narrow the view to 1 line, got %d", l.matched)
+	}
+	// copyAll grabs the raw buffer, so the filtered-out line is still copied.
+	if got, want := l.copyAll(), "keep me\ndrop me"; got != want {
+		t.Fatalf("copyAll = %q, want %q", got, want)
+	}
+}
+
+func TestLogCopyAllKeyCopiesToClipboard(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys(), screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 10)
+	for i := 0; i < 3; i++ {
+		app.logs.appendLine("l" + itoa(i))
+	}
+
+	// Route through handleKey so the global shortcut layer is exercised too.
+	m, cmd := app.handleKey(mkKey("c"))
+	a := m.(App)
+	if cmd == nil {
+		t.Fatal("c should produce a clipboard command")
+	}
+	if !strings.Contains(a.status, "copied 3 lines") {
+		t.Fatalf("expected a copy status, got %q", a.status)
+	}
+}
+
+func TestLogClearKeyEmptiesBufferAndResumesFollow(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys(), screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 10)
+	for i := 0; i < 5; i++ {
+		app.logs.appendLine("l" + itoa(i))
+	}
+	app.logs.follow = false // a paused, scrolled-up view
+
+	// C must reach the logs handler, not the global kubectl-command overlay.
+	m, _ := app.handleKey(mkKey("C"))
+	a := m.(App)
+	if a.overlay != overlayNone {
+		t.Fatalf("C in logs should clear, not open an overlay (got overlay %v)", a.overlay)
+	}
+	if len(a.logs.lines) != 0 || a.logs.content != "" || a.logs.matched != 0 {
+		t.Fatalf("clear should empty the buffer: lines=%d content=%q matched=%d",
+			len(a.logs.lines), a.logs.content, a.logs.matched)
+	}
+	if !a.logs.follow {
+		t.Fatal("clear should re-enable follow so fresh lines auto-scroll")
+	}
+	if !strings.Contains(a.status, "cleared") {
+		t.Fatalf("expected a clear status, got %q", a.status)
+	}
+
+	// The stream keeps running, so new lines flow back in after a clear.
+	a.logs.appendLine("fresh")
+	if a.logs.content != "fresh" {
+		t.Fatalf("post-clear append = %q, want %q", a.logs.content, "fresh")
+	}
+}
