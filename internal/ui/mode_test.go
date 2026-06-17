@@ -188,6 +188,32 @@ func TestEditModeToggle(t *testing.T) {
 	}
 }
 
+func TestEditModeShortcut(t *testing.T) {
+	read := App{theme: PickTheme("ansi"), keys: defaultKeys(), readOnly: true}
+	m, _ := read.handleKey(mkKey("E"))
+	prompted := m.(App)
+	if prompted.overlay != overlayConfirm || prompted.confirm.action == nil {
+		t.Fatal("Shift+E from read-only should prompt before entering edit mode")
+	}
+	enabled, _ := prompted.Update(prompted.confirm.action())
+	if enabled.(App).readOnly {
+		t.Error("confirming Shift+E should enter edit mode")
+	}
+
+	edit := App{theme: PickTheme("ansi"), keys: defaultKeys()}
+	m, cmd := edit.handleKey(mkKey("E"))
+	if m.(App).overlay == overlayConfirm {
+		t.Fatal("Shift+E from edit mode should not prompt")
+	}
+	if cmd == nil {
+		t.Fatal("Shift+E from edit mode should return a mode command")
+	}
+	back, _ := m.(App).Update(cmd())
+	if !back.(App).readOnly {
+		t.Error("Shift+E from edit mode should return to read-only")
+	}
+}
+
 func TestDevModeOmitsDiscoverButton(t *testing.T) {
 	reg := modeTestRegistry()
 	cat := []navCatGroup{{"Workloads", []navCatItem{{"Pods", "pods"}}}}

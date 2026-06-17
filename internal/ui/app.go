@@ -752,11 +752,15 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	if !a.filterInput() && key.Matches(msg, a.keys.Command) {
-		return a.openCommand()
-	}
-	if !a.filterInput() && key.Matches(msg, a.keys.Docs) {
-		return a.openDocs()
+	if !a.filterInput() {
+		switch {
+		case key.Matches(msg, a.keys.Command):
+			return a.openCommand()
+		case key.Matches(msg, a.keys.Docs):
+			return a.openDocs()
+		case key.Matches(msg, a.keys.EditMode):
+			return a.toggleEditMode()
+		}
 	}
 
 	switch a.screen {
@@ -2491,6 +2495,10 @@ func (a App) hints() []hint {
 	case overlayCommand:
 		return []hint{{"esc", "close"}, {"C", "close"}}
 	}
+	editModeHint := hint{"E", "edit mode"}
+	if !a.readOnly {
+		editModeHint = hint{"E", "read-only"}
+	}
 	switch a.screen {
 	case screenConfig:
 		h := []hint{{"↑↓", "scroll"}, {"d", "describe"}}
@@ -2503,7 +2511,7 @@ func (a App) hints() []hint {
 		if !a.readOnly {
 			h = append(h, hint{"e", "edit"})
 		}
-		return append(h, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		return append(h, editModeHint, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenDetail:
 		h := []hint{{"↑↓", "scroll"}, {"enter", "config"}}
 		if a.detailTarget.res.IsDeployment() {
@@ -2515,7 +2523,7 @@ func (a App) hints() []hint {
 		if !a.readOnly {
 			h = append(h, hint{"e", "edit"})
 		}
-		return append(h, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		return append(h, editModeHint, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
 		switch {
 		case a.logs.selecting && a.logs.marking:
@@ -2523,15 +2531,15 @@ func (a App) hints() []hint {
 		case a.logs.selecting:
 			return []hint{{"↑↓", "move"}, {"m", "mark"}, {"y", "copy"}, {"esc", "cancel"}}
 		}
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"c", "copy"}, {"^l", "clear"}, {"O", "docs"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"c", "copy"}, {"^l", "clear"}, editModeHint, {"O", "docs"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
-			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
+			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, editModeHint, {"C", "cmd"}, {"?", "help"}}
 		}
-		return []hint{{"tab", "nav"}, {":", "jump"}, {"^k", "palette"}, {"C", "cmd"}, {"r", "refresh"}, {"n", "ns"}, {"c", "ctx"}, {"?", "help"}, {"q", "quit"}}
+		return []hint{{"tab", "nav"}, {":", "jump"}, editModeHint, {"^k", "palette"}, {"C", "cmd"}, {"r", "refresh"}, {"n", "ns"}, {"c", "ctx"}, {"?", "help"}, {"q", "quit"}}
 	}
 	if a.focus == focusSidebar {
-		return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
+		return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, editModeHint, {"C", "cmd"}, {"?", "help"}}
 	}
 
 	// Context-aware: surface the actions that apply to the current resource.
@@ -2567,7 +2575,7 @@ func (a App) hints() []hint {
 		h = append(h, hint{"e", "edit"}, hint{"x", "del"})
 	}
 	h = append(h,
-		hint{"/", "filter"}, hint{"S", "sort"}, hint{"O", "docs"}, hint{"C", "cmd"},
+		editModeHint, hint{"/", "filter"}, hint{"S", "sort"}, hint{"O", "docs"}, hint{"C", "cmd"},
 		hint{"tab", "nav"}, hint{"^k", "palette"}, hint{"?", "help"}, hint{"q", "quit"})
 	if a.table.filterActive() {
 		h = append([]hint{{"esc", "clear filter"}}, h...)

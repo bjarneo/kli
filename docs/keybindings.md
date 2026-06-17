@@ -45,6 +45,7 @@ place, the same as `kubectl drain --ignore-daemonsets`.
 | --- | --- |
 | `:` | jump to any resource (`pods`, `deploy`, `svc`, ...) |
 | `Ctrl+K` | command palette |
+| `Shift+E` | toggle edit mode / read-only mode |
 | `/` | filter the current table (`esc` clears) |
 | `S` | sort by a column (re-pick to flip direction) |
 | `r` / `Ctrl+r` | refresh now |
@@ -57,6 +58,9 @@ place, the same as `kubectl drain --ignore-daemonsets`.
 | `?` | help |
 | `q` | quit from the table or cockpit; back from config, YAML, and logs |
 | `Ctrl+C` | quit outside the embedded shell/editor |
+
+`ku` starts read-only unless launched with `--edit`. Mutating actions are hidden
+until edit mode is enabled with `Shift+E` or the command palette.
 
 ## Overlays
 

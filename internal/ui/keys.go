@@ -38,6 +38,7 @@ type keyMap struct {
 	Refresh   key.Binding
 	Jump      key.Binding
 	Palette   key.Binding
+	EditMode  key.Binding
 	Namespace key.Binding
 	Context   key.Binding
 	Command   key.Binding
@@ -91,6 +92,7 @@ func defaultKeys() keyMap {
 		Refresh:   key.NewBinding(key.WithKeys("r", "ctrl+r"), key.WithHelp("r", "refresh")),
 		Jump:      key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "jump to resource")),
 		Palette:   key.NewBinding(key.WithKeys("ctrl+k"), key.WithHelp("^k", "command palette")),
+		EditMode:  key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "edit mode")),
 		Namespace: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "namespace")),
 		Context:   key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "context")),
 		Command:   key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "kubectl command")),
@@ -121,7 +123,7 @@ func (k keyMap) groups() []helpGroup {
 	return []helpGroup{
 		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom, k.HScroll}},
 		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Cordon, k.Drain, k.Docs}},
-		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
+		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.EditMode, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
 		{"Logs", []key.Binding{k.Follow, k.Filter, k.Wrap, k.Select, k.Mark, k.Copy, k.CopyAll, k.Clear}},
 		{"General", []key.Binding{k.Help, k.Back, k.Quit}},
