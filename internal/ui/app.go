@@ -444,6 +444,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a.adoptClient(m.client)
 
+	case nodeCordonStateMsg:
+		if m.err != nil {
+			a.setStatus("cordon: "+trimErr(m.err), true)
+			return a, nil
+		}
+		a.clearStatus()
+		if m.cordoned {
+			return a.confirmAction("Uncordon node", "Uncordon "+m.name+" (allow scheduling)?", false,
+				cordonCmd(a.client, m.name, true))
+		}
+		return a.confirmAction("Cordon node", "Cordon "+m.name+" (stop new pods)?", false,
+			cordonCmd(a.client, m.name, false))
+
 	case crdsDiscoveredMsg:
 		if m.client != a.client {
 			return a, nil // a context switch landed first; ignore the stale result
@@ -910,6 +923,10 @@ func (a App) updateMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.openTriggerJob()
 	case key.Matches(msg, a.keys.Delete):
 		return a.openDelete()
+	case key.Matches(msg, a.keys.Cordon):
+		return a.openCordon()
+	case key.Matches(msg, a.keys.Drain):
+		return a.openDrain()
 	default:
 		var cmd tea.Cmd
 		a.table, cmd = a.table.Update(msg)
@@ -1697,6 +1714,35 @@ func (a App) openTriggerJob() (tea.Model, tea.Cmd) {
 	return a.openTriggerJobTarget(target{res: a.res, ns: row.Namespace, name: row.Name})
 }
 
+// openCordon toggles a node between schedulable and cordoned. It first reads the
+// current state so the confirm names the right direction.
+func (a App) openCordon() (tea.Model, tea.Cmd) {
+	if !a.res.IsNodes() {
+		a.setStatus("cordon: switch to nodes first", true)
+		return a, nil
+	}
+	row, ok := a.table.selected()
+	if !ok {
+		return a, nil
+	}
+	a.setStatus("checking "+row.Name+"…", false)
+	return a, nodeCordonStateCmd(a.client, row.Name)
+}
+
+// openDrain cordons a node and evicts its pods after a danger confirm.
+func (a App) openDrain() (tea.Model, tea.Cmd) {
+	if !a.res.IsNodes() {
+		a.setStatus("drain: switch to nodes first", true)
+		return a, nil
+	}
+	row, ok := a.table.selected()
+	if !ok {
+		return a, nil
+	}
+	return a.confirmAction("Drain node", "Drain "+row.Name+"? Cordons it and evicts all pods.", true,
+		drainCmd(a.client, row.Name))
+}
+
 func (a App) openTriggerJobTarget(t target) (tea.Model, tea.Cmd) {
 	if !t.res.IsCronJob() {
 		a.setStatus("trigger: switch to cronjobs first", true)
@@ -1800,7 +1846,10 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 			items = append(items, selItem{title: "Follow deployment logs", desc: "L", id: "act:deploylogs"})
 		}
 		if a.res.IsNodes() {
-			items = append(items, selItem{title: "Node shell (debug pod)", desc: "s", id: "act:nodeshell"})
+			items = append(items,
+				selItem{title: "Cordon / uncordon node", desc: "K", id: "act:cordon"},
+				selItem{title: "Drain node", desc: "D", id: "act:drain"},
+				selItem{title: "Node shell (debug pod)", desc: "s", id: "act:nodeshell"})
 		}
 		if a.res.Scalable() {
 			items = append(items, selItem{title: "Scale", desc: "s", id: "act:scale"})
@@ -1984,6 +2033,10 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		return a.openShell()
 	case "act:nodeshell":
 		return a.openNodeShell()
+	case "act:cordon":
+		return a.openCordon()
+	case "act:drain":
+		return a.openDrain()
 	case "act:scale":
 		return a.openScale()
 	case "act:restart":
@@ -2334,7 +2387,7 @@ func (a App) hints() []hint {
 	case a.res.IsDeployment():
 		h = append(h, hint{"L", "all logs"})
 	case a.res.IsNodes():
-		h = append(h, hint{"s", "node shell"})
+		h = append(h, hint{"s", "node shell"}, hint{"K", "cordon"}, hint{"D", "drain"})
 	case a.res.Scalable():
 		h = append(h, hint{"s", "scale"})
 	}

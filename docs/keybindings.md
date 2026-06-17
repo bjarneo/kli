@@ -26,11 +26,18 @@ can run any of these and jump to any resource.
 | `s` | shell into a pod, node shell on a node, or scale a workload |
 | `R` | rollout restart (deployments, statefulsets, daemonsets) |
 | `t` | trigger a CronJob once (with confirm) |
+| `K` | cordon / uncordon a node (with confirm) |
+| `D` | drain a node: cordon and evict its pods (with confirm) |
 | `x` / `Delete` | delete (with confirm) |
 | `O` | open Kubernetes docs for the current resource, when known |
 
 The bottom bar adapts to the selected resource: pods show logs and shell, nodes
-show a node shell, workloads show scale and restart, and CronJobs show trigger.
+show node shell, cordon, and drain, workloads show scale and restart, and
+CronJobs show trigger.
+
+Draining cordons the node, then evicts its pods through the eviction API so
+PodDisruptionBudgets are honored. DaemonSet and static (mirror) pods are left in
+place, the same as `kubectl drain --ignore-daemonsets`.
 
 ## Views and cluster
 

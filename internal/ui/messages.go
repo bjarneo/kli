@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -84,6 +85,14 @@ type actionDoneMsg struct {
 type clientReadyMsg struct {
 	client *k8s.Client
 	err    error
+}
+
+// nodeCordonStateMsg reports whether a node is currently cordoned, so the UI can
+// open the right confirm (cordon vs uncordon) for the toggle.
+type nodeCordonStateMsg struct {
+	name     string
+	cordoned bool
+	err      error
 }
 
 type cockpitLoadedMsg struct {
@@ -358,6 +367,51 @@ func triggerJobCmd(cl *k8s.Client, ns, name string) tea.Cmd {
 			return actionDoneMsg{err: err}
 		}
 		return actionDoneMsg{text: "triggered job " + job}
+	}
+}
+
+// nodeCordonStateCmd reads a node's current schedulable state so the toggle can
+// pick cordon vs uncordon.
+func nodeCordonStateCmd(cl *k8s.Client, name string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := opCtx()
+		defer cancel()
+		cordoned, err := cl.NodeCordoned(ctx, name)
+		return nodeCordonStateMsg{name: name, cordoned: cordoned, err: err}
+	}
+}
+
+func cordonCmd(cl *k8s.Client, name string, uncordon bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := opCtx()
+		defer cancel()
+		verb, err := "cordoned", cl.Cordon(ctx, name)
+		if uncordon {
+			verb, err = "uncordoned", cl.Uncordon(ctx, name)
+		}
+		if err != nil {
+			return actionDoneMsg{err: err}
+		}
+		return actionDoneMsg{text: verb + " " + name, reload: true}
+	}
+}
+
+// drainCmd cordons a node and evicts its pods. Drain can take minutes (the
+// Eviction API waits on PodDisruptionBudgets), so it runs under its own generous
+// timeout rather than the short opCtx used by quick mutations.
+func drainCmd(cl *k8s.Client, name string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		res, err := cl.Drain(ctx, name)
+		if err != nil {
+			return actionDoneMsg{err: fmt.Errorf("drain %s: %w (evicted %d)", name, err, res.Evicted), reload: true}
+		}
+		text := fmt.Sprintf("drained %s: evicted %d", name, res.Evicted)
+		if len(res.Skipped) > 0 {
+			text += fmt.Sprintf(", skipped %d", len(res.Skipped))
+		}
+		return actionDoneMsg{text: text, reload: true}
 	}
 }
 

@@ -26,6 +26,8 @@ type keyMap struct {
 	Restart    key.Binding
 	Trigger    key.Binding
 	Delete     key.Binding
+	Cordon     key.Binding
+	Drain      key.Binding
 	Docs       key.Binding
 	DeployLogs key.Binding
 
@@ -78,6 +80,8 @@ func defaultKeys() keyMap {
 		Restart:    key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rollout restart")),
 		Trigger:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "trigger job")),
 		Delete:     key.NewBinding(key.WithKeys("x", "delete"), key.WithHelp("x", "delete")),
+		Cordon:     key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "cordon node")),
+		Drain:      key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "drain node")),
 		Docs:       key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "open docs")),
 		DeployLogs: key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "deployment logs")),
 
@@ -116,7 +120,7 @@ type helpGroup struct {
 func (k keyMap) groups() []helpGroup {
 	return []helpGroup{
 		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom, k.HScroll}},
-		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Docs}},
+		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Cordon, k.Drain, k.Docs}},
 		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
 		{"Logs", []key.Binding{k.Follow, k.Filter, k.Wrap, k.Select, k.Mark, k.Copy, k.CopyAll, k.Clear}},
