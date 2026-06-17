@@ -159,28 +159,24 @@ func NewTheme(name string, p Palette) Theme {
 	return t
 }
 
-// PickTheme selects the theme at startup. ANSI is the default and adapts to a
-// light or dark terminal background; the built-in themes are selectable via
-// --theme or $KU_THEME. Background detection runs here (before the Bubble Tea
-// program starts) so it does not race the program's stdin reader.
+// PickTheme resolves a theme name to a Theme at startup, reading the terminal
+// background once here (before the Bubble Tea program starts) so detection does
+// not race the program's stdin reader. The name is already resolved by the
+// caller; theme precedence (--theme, $KU_THEME, saved) lives in Run.
 func PickTheme(name string) Theme {
-	if name == "" {
-		name = os.Getenv("KU_THEME")
-	}
 	return buildTheme(name, lipgloss.HasDarkBackground(os.Stdin, os.Stdout))
 }
 
 // buildTheme constructs a theme by name without touching the terminal, so it is
 // safe to call mid-session. Built-in themes pick their light or dark variant
-// from dark; ansi adapts the terminal's own palette.
+// from dark; an unknown name (including "ansi") adapts the terminal's own palette.
 func buildTheme(name string, dark bool) Theme {
-	id := normalizeThemeName(name)
-	if oc, ok := ocByID[id]; ok {
+	if oc, ok := lookupOCTheme(name); ok {
 		sub := oc.dark
 		if !dark {
 			sub = oc.light
 		}
-		t := NewTheme(id, ocToPalette(sub))
+		t := NewTheme(oc.id, ocToPalette(sub))
 		t.Dark = dark
 		return t
 	}
@@ -189,28 +185,12 @@ func buildTheme(name string, dark bool) Theme {
 	return t
 }
 
-func normalizeThemeName(name string) string {
+// lookupOCTheme finds a built-in theme by name, accepting the tokyonight aliases.
+func lookupOCTheme(name string) (ocTheme, bool) {
 	n := strings.ToLower(strings.TrimSpace(name))
-	switch n {
-	case "tokyo", "tokyo-night":
-		return "tokyonight"
+	if n == "tokyo" || n == "tokyo-night" {
+		n = "tokyonight"
 	}
-	if _, ok := ocByID[n]; ok {
-		return n
-	}
-	return "ansi"
-}
-
-type themeEntry struct {
-	id    string
-	title string
-}
-
-func themeCatalog() []themeEntry {
-	out := make([]themeEntry, 0, len(ocThemeList)+1)
-	out = append(out, themeEntry{id: "ansi", title: "ANSI"})
-	for _, t := range ocThemeList {
-		out = append(out, themeEntry{id: t.id, title: t.title})
-	}
-	return out
+	oc, ok := ocByID[n]
+	return oc, ok
 }

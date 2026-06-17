@@ -167,8 +167,7 @@ func (s selector) Update(msg tea.Msg) (selector, selResult, tea.Cmd) {
 		case "esc":
 			return s, selResult{canceled: true}, nil
 		case "enter":
-			if len(s.match) > 0 {
-				it := s.items[s.match[s.cursor]]
+			if it, ok := s.current(); ok {
 				return s, selResult{accepted: true, id: it.id, value: s.input.Value()}, nil
 			}
 			if s.freeform {

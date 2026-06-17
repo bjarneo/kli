@@ -114,7 +114,7 @@ type App struct {
 	detailTarget target
 	logTarget    target
 	execTarget   target
-	themeBase    string // theme to restore on theme-picker cancel
+	themeBase    Theme // theme to restore on theme-picker cancel
 
 	logSession int
 	loadSeq    int
@@ -1064,7 +1064,7 @@ func (a App) updateSelector(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case res.canceled:
 		a.overlay = overlayNone
 		if previewing {
-			a.applyTheme(buildTheme(a.themeBase, a.theme.Dark))
+			a.applyTheme(a.themeBase)
 		}
 		return a, nil
 	case res.accepted:
@@ -1845,15 +1845,18 @@ func (a App) openContextPicker() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openThemePicker() (tea.Model, tea.Cmd) {
-	a.themeBase = a.theme.Name
-	cat := themeCatalog()
-	items := make([]selItem, 0, len(cat))
-	for _, t := range cat {
+	a.themeBase = a.theme
+	items := make([]selItem, 0, len(ocThemeList)+1)
+	add := func(id, title string) {
 		desc := ""
-		if t.id == a.theme.Name {
+		if id == a.theme.Name {
 			desc = "current"
 		}
-		items = append(items, selItem{title: t.title, desc: desc, id: t.id})
+		items = append(items, selItem{title: title, desc: desc, id: id})
+	}
+	add("ansi", "ANSI")
+	for _, t := range ocThemeList {
+		add(t.id, t.title)
 	}
 	a.sel.open(selTheme, "Switch theme", "theme", items, false)
 	a.sel.focusID(a.theme.Name)
