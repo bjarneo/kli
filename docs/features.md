@@ -87,7 +87,9 @@ so you can read back through history; `g` / `G` jump to top and bottom.
 `s` on a pod opens an interactive shell in an overlay, run inside the TUI using
 a virtual terminal. It runs `bash` if present, otherwise `sh`, over the cluster's
 exec stream (WebSocket with SPDY fallback, like kubectl). `Ctrl+\` detaches; the
-overlay also closes when you `exit`.
+overlay also closes when you `exit`. Paste with `Ctrl+Shift+V`; `Ctrl+V` is sent
+to the running shell/program. Mouse selection uses your terminal's native
+click-and-drag selection inside shell mode.
 
 `s` on a node opens a node shell the way `kubectl debug node` does: it spawns a
 short-lived privileged debug pod pinned to the node, with the host filesystem

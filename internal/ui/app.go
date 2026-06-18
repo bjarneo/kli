@@ -311,6 +311,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a.handleKey(m)
 
+	case tea.PasteMsg:
+		return a.pasteTermText(m.Content)
+
+	case tea.ClipboardMsg:
+		return a.pasteTermText(m.Content)
+
 	case tea.MouseMsg:
 		return a.handleMouse(m)
 
@@ -1159,6 +1165,9 @@ func (a App) updateTerm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.setStatus(note, false)
 		return a, cleanup
 	}
+	if isPasteKey(msg) {
+		return a, tea.ReadClipboard
+	}
 	if ti, ok := translateKey(msg); ok && a.term.input != nil {
 		select {
 		case a.term.input <- ti:
@@ -1166,6 +1175,29 @@ func (a App) updateTerm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return a, nil
+}
+
+func (a App) pasteTermText(text string) (tea.Model, tea.Cmd) {
+	if a.overlay != overlayTerm || a.term.finished || a.term.input == nil || text == "" {
+		return a, nil
+	}
+	select {
+	case a.term.input <- termInput{text: text}:
+	default:
+	}
+	return a, nil
+}
+
+func isPasteKey(msg tea.KeyMsg) bool {
+	key := msg.Key()
+	if key.Mod != tea.ModCtrl|tea.ModShift {
+		return false
+	}
+	code := key.Code
+	if key.BaseCode != 0 {
+		code = key.BaseCode
+	}
+	return code == 'v' || code == 'V'
 }
 
 func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -2201,13 +2233,18 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 func (a App) View() tea.View {
 	v := tea.NewView(a.render())
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
-	// Release the mouse in the logs view so the terminal's own click-drag text
-	// selection and copy work there (keyboard scrolling still applies).
-	if a.screen == screenLogs && a.overlay == overlayNone {
-		v.MouseMode = tea.MouseModeNone
-	}
+	v.MouseMode = a.mouseMode()
 	return v
+}
+
+func (a App) mouseMode() tea.MouseMode {
+	// Release the mouse where native terminal selection is more useful than app
+	// mouse handling. Shell mode keeps keyboard capture but lets click-drag select
+	// text in the terminal.
+	if a.overlay == overlayTerm || (a.screen == screenLogs && a.overlay == overlayNone) {
+		return tea.MouseModeNone
+	}
+	return tea.MouseModeCellMotion
 }
 
 func (a App) render() string {

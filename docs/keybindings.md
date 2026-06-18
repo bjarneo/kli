@@ -70,7 +70,7 @@ until edit mode is enabled with `Shift+E` or the command palette.
 | Logs (selecting) | `↑` / `↓` (and `g` / `G`, page keys) move the cursor, `m` mark, `y` / `Enter` copy, `esc` cancel |
 | Config summary | scroll, `d` / `y` YAML, `e` edit, `t` trigger CronJob, `esc` back |
 | Detail (YAML) | scroll, `Enter` config, `e` edit, `t` trigger CronJob, `esc` back |
-| Shell / editor | keys go to the program; `Ctrl+\` detaches (cancels an edit) |
+| Shell / editor | keys go to the program; `Ctrl+Shift+V` pastes in shell mode; `Ctrl+V` is passed through; `Ctrl+\` detaches (cancels an edit) |
 | Command overlay | `C`, `q`, or `esc` closes |
 | Pickers / palette | move, type to filter, `Enter` select, `esc` cancel |
 | Confirm | `y` / `Enter` confirm, `n` / `esc` cancel |
@@ -92,3 +92,9 @@ To grab the whole buffer at once, press `c` to copy every buffered line to the
 clipboard (the raw lines, so an active filter never hides anything). Press
 `Ctrl+l` to clear the on-screen buffer; the stream keeps running, so new lines
 flow back in right away.
+
+## Shell paste and selection
+
+In shell mode, paste with `Ctrl+Shift+V`. `Ctrl+V` is not a paste shortcut; it is
+sent to the running shell/program. Mouse capture is released in shell mode, so
+your terminal's normal click-and-drag text selection works inside the shell.
