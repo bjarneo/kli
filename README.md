@@ -136,6 +136,10 @@ See [Configuration](docs/configuration.md) for the full reference.
 
 Full index: [docs/](docs/README.md).
 
+## License
+
+[MIT](LICENSE)
+
 ## Created by
 
 [x.com/iamdothash](https://x.com/iamdothash)
