@@ -6,6 +6,7 @@ package k8s
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
 
 	"k8s.io/client-go/discovery"
@@ -106,7 +107,7 @@ func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
 	// stop the app; we keep whatever resolved and surface a warning.
 	if err := c.loadRegistry(); err != nil {
 		if c.registry == nil {
-			return nil, fmt.Errorf("discover resources: %w", err)
+			return nil, discoveryError(restCfg.Host, err)
 		}
 		c.DiscoveryWarning = discoveryWarning(err)
 	}
@@ -143,6 +144,18 @@ func kubeconfigError(err error) error {
 		return errors.New("kubeconfig is empty or missing; set KUBECONFIG, pass --kubeconfig, or create ~/.kube/config")
 	}
 	return fmt.Errorf("load kubeconfig: %w", err)
+}
+
+func discoveryError(host string, err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) && uerr.Err != nil {
+		target := "Kubernetes API"
+		if host != "" {
+			target += " " + host
+		}
+		return fmt.Errorf("connect to %s: %w", target, uerr.Err)
+	}
+	return fmt.Errorf("discover resources: %w", err)
 }
 
 // discoveryWarning summarizes a partial-discovery error for the status line.
